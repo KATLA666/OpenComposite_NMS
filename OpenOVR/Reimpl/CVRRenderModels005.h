@@ -1,8 +1,6 @@
 #pragma once
+#include "BaseRenderModels.h"
 #include "OpenVR/interfaces/IVRRenderModels_005.h"
-
-// Include INTERFACE_FUNC since there isn't a base for this class
-#include "BaseCommon.h"
 
 using namespace vr;
 using namespace IVRRenderModels_005; // TODO remove this
@@ -10,6 +8,8 @@ using namespace IVRRenderModels_005; // TODO remove this
 class CVRRenderModels_005 : public IVRRenderModels_005::IVRRenderModels, public CVRCommon {
 	CVR_GEN_IFACE();
 
+private:
+	BaseRenderModels base;
 public:
 
 	/** Loads and returns a render model for use in the application. pchRenderModelName should be a render model name
