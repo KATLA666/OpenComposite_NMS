@@ -10,11 +10,9 @@ class OculusTouchInteractionProfile : public InteractionProfile {
 public:
 	OculusTouchInteractionProfile();
 
-	const std::string& GetPath() const override { return path; }
-	const std::vector<std::string>& GetValidInputPaths() const override { return validInputPaths; }
-
-	bool IsInputPathValid(const std::string& inputPath) const override { return validInputPathsSet.count(inputPath) > 0; }
-
+	const std::string& GetPath() const override;
+	const std::unordered_set<std::string>& GetValidInputPaths() const override;
+	bool IsInputPathValid(const std::string& inputPath) const override;
 	const std::vector<VirtualInputFactory>& GetVirtualInputs() const override;
 
 protected:
@@ -22,8 +20,6 @@ protected:
 
 private:
 	std::string path;
-	std::vector<std::string> validInputPaths;
-	std::set<std::string> validInputPathsSet;
-
+	std::unordered_set<std::string> validInputPaths;
 	std::vector<VirtualInputFactory> virtualInputs;
 };
