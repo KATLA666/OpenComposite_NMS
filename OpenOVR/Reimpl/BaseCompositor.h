@@ -8,6 +8,9 @@
 
 typedef unsigned int GLuint;
 
+typedef int OOVR_EVRCompositorTextureUsage;
+
+
 struct OOVR_Compositor_FrameTiming {
 	uint32_t m_nSize; // Set to sizeof( Compositor_FrameTiming )
 	uint32_t m_nFrameIndex;
@@ -183,6 +186,15 @@ public:
 	 */
 	ovr_enum_t Submit(vr::EVREye eEye, const vr::Texture_t* pTexture, const vr::VRTextureBounds_t* pBounds, vr::EVRSubmitFlags nSubmitFlags = vr::Submit_Default);
 	ovr_enum_t SubmitWithArrayIndex(vr::EVREye eEye, const vr::Texture_t* pTexture, uint32_t unTextureArrayIndex, const vr::VRTextureBounds_t* pBounds, vr::EVRSubmitFlags nSubmitFlags = vr::Submit_Default);
+
+	virtual int GetSubmitTexture(
+		vr::Texture_t* pOutTexture,
+		bool* pNeedsFlush,
+		OOVR_EVRCompositorTextureUsage eUsage,
+		const vr::Texture_t* pTexture,
+		const vr::VRTextureBounds_t* pBounds,
+		vr::EVRSubmitFlags nSubmitFlags);
+
 
 	/** Clears the frame that was sent with the last call to Submit. This will cause the
 	 * compositor to show the grid until Submit is called again. */

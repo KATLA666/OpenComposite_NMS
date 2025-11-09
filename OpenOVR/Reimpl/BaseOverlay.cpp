@@ -62,7 +62,25 @@ public:
 	    : key(key), name(name)
 	{
 	}
+
+	// Subview-support
+	OverlayData* parent = nullptr;                   // Optional Parent (nullptr = no Subview)
+	std::vector<OverlayData*> subviews;              // List of Child-Overlays
+	bool isSubview = false;                          // True, if this overlay is a Subview
+
+	float subviewX = 0.0f;
+	float subviewY = 0.0f;
+
+	static std::unordered_map<std::string, OverlayData*> overlays;
+	static std::unordered_set<OverlayData*> validOverlays;
+	static std::unordered_map<VROverlayHandle_t, OverlayData*> handleToOverlay;
+
 };
+
+// definitions for static members declared in BaseOverlay::OverlayData
+std::unordered_map<std::string, BaseOverlay::OverlayData*> BaseOverlay::OverlayData::overlays;
+std::unordered_set<BaseOverlay::OverlayData*> BaseOverlay::OverlayData::validOverlays;
+std::unordered_map<VROverlayHandle_t, BaseOverlay::OverlayData*> BaseOverlay::OverlayData::handleToOverlay;
 
 // TODO don't pass around handles, as it will cause
 // crashes when we should merely return VROverlayError_InvalidHandle
@@ -170,6 +188,11 @@ bool BaseOverlay::_HandleOverlayInput(EVREye side, TrackedDeviceIndex_t index, V
 	return false;
 }
 
+VROverlayHandle_t BaseOverlay::GetNextOverlayHandle() {
+	static VROverlayHandle_t nextHandle = 1;
+	return nextHandle++;
+}
+
 EVROverlayError BaseOverlay::FindOverlay(const char* pchOverlayKey, VROverlayHandle_t* pOverlayHandle)
 {
 	if (overlays.count(pchOverlayKey)) {
@@ -202,6 +225,71 @@ EVROverlayError BaseOverlay::CreateOverlay(const char* pchOverlayKey, const char
 
 	return VROverlayError_None;
 }
+
+EVROverlayError BaseOverlay::CreateSubviewOverlay(VROverlayHandle_t parentOverlayHandle, const char* pchSubviewOverlayKey, const char* pchSubviewOverlayName, VROverlayHandle_t* pSubviewOverlayHandle)
+{
+	// Check if keys are already in use
+	if (overlays.count(pchSubviewOverlayKey)) {
+		return VROverlayError_KeyInUse;
+	}
+
+	// Search Parent
+	auto itParent = OverlayData::handleToOverlay.find(parentOverlayHandle);
+	if (itParent == OverlayData::handleToOverlay.end())
+		return VROverlayError_InvalidHandle;
+
+	OverlayData* parent = itParent->second;
+	if (!parent)
+		return VROverlayError_InvalidHandle;
+
+	// New Subview-Overlay
+	auto* subview = new OverlayData(pchSubviewOverlayKey, pchSubviewOverlayName);
+	subview->isSubview = true;
+	subview->parent = parent;
+
+	// Copy Parameter from Parent
+	subview->layerQuad = parent->layerQuad;
+	subview->layerQuad.pose = { { 0.f, 0.f, 0.f, 1.f }, { 0.f, 0.f, 0.f } }; // relativ to Parent
+	subview->visible = parent->visible;
+	subview->colour = parent->colour;
+	subview->colourSpace = parent->colourSpace;
+
+	// Gen handle
+	VROverlayHandle_t newHandle = GetNextOverlayHandle();
+	OverlayData::handleToOverlay[newHandle] = subview;
+	overlays[pchSubviewOverlayKey] = subview;
+	validOverlays.insert(subview);
+
+	// Parent <-> Child-connection
+	parent->subviews.push_back(subview);
+
+	if (pSubviewOverlayHandle)
+		*pSubviewOverlayHandle = newHandle;
+
+	return VROverlayError_None;
+}
+
+EVROverlayError BaseOverlay::SetSubviewPosition( VROverlayHandle_t ulOverlayHandle, float fX, float fY )
+{
+	// Lookup: Handle → OverlayData
+	auto it = OverlayData::handleToOverlay.find(ulOverlayHandle);
+	if (it == OverlayData::handleToOverlay.end())
+		return VROverlayError_InvalidHandle;
+
+	OverlayData* overlay = it->second;
+	if (!overlay || !overlay->isSubview || !overlay->parent)
+		return vr::VROverlayError_InvalidHandle;
+
+	// Save Position in Parent-Overlays
+	overlay->subviewX = fX;
+	overlay->subviewY = fY;
+
+	overlay->layerQuad.pose.position.x = fX;
+	overlay->layerQuad.pose.position.y = fY;
+
+	return VROverlayError_None;
+}
+
 EVROverlayError BaseOverlay::DestroyOverlay(VROverlayHandle_t ulOverlayHandle)
 {
 	USEH();

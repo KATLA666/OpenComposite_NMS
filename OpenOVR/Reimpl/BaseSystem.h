@@ -267,7 +267,13 @@ public:
 	* This pose will always be older than the call to this function and should not be used to render the device.
 	uncbVREvent should be the size in bytes of the VREvent_t struct */
 	bool PollNextEventWithPose(vr::ETrackingUniverseOrigin eOrigin, vr::VREvent_t* pEvent, uint32_t uncbVREvent, vr::TrackedDevicePose_t* pTrackedDevicePose);
-
+	/*Compatibility for newer version	*/
+	bool PollNextEventWithPoseAndOverlays(
+	    vr::ETrackingUniverseOrigin eOrigin,
+	    vr::VREvent_t* pEvent,
+	    uint32_t unPoseArrayCount,
+	    vr::TrackedDevicePose_t* pTrackedDevicePose,
+	    vr::VROverlayHandle_t* hand);
 	/** returns the name of an EVREvent enum value */
 	const char* GetEventTypeNameFromEnum(vr::EVREventType eType);
 

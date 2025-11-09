@@ -658,6 +658,18 @@ bool BaseSystem::PollNextEventWithPose(ETrackingUniverseOrigin eOrigin, VREvent_
 	return true;
 }
 
+bool BaseSystem::PollNextEventWithPoseAndOverlays(
+	ETrackingUniverseOrigin eOrigin,
+	VREvent_t* pEvent,
+	uint32_t unPoseArrayCount,
+	TrackedDevicePose_t* pTrackedDevicePose,
+	VROverlayHandle_t* hand
+) {
+	// Compatibility-Wrapper for newer OpenVR-functions
+	// (SteamVR-Overlays will be ignored by OpenComposite)
+	return PollNextEventWithPose(eOrigin, pEvent, unPoseArrayCount, pTrackedDevicePose);
+}
+
 const char* BaseSystem::GetEventTypeNameFromEnum(EVREventType eType)
 {
 	STUBBED();

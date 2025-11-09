@@ -202,6 +202,7 @@ public:
 
 	// If an overlay needs input, this grabs the input and returns whether the input should preceed to the application
 	bool _HandleOverlayInput(vr::EVREye role, vr::TrackedDeviceIndex_t controllerDeviceIndex, vr::VRControllerState_t state);
+	vr::VROverlayHandle_t GetNextOverlayHandle();
 
 	// ---------------------------------------------
 	// Overlay management methods
@@ -212,6 +213,14 @@ public:
 
 	/** Creates a new named overlay. All overlays start hidden and with default settings. */
 	vr::EVROverlayError CreateOverlay(const char* pchOverlayKey, const char* pchOverlayName, vr::VROverlayHandle_t* pOverlayHandle);
+
+	/** Creates a SubviewOverlay - temp fix*/
+	/** Creates a Subview Overlay, which is a separate image that gets composited onto an existing parent overlay based on a 2D transform.
+		* Subview overlays may only be created for parent overlays of the same process. */
+	vr::EVROverlayError CreateSubviewOverlay(vr::VROverlayHandle_t parentOverlayHandle, const char* pchSubviewOverlayKey, const char* pchSubviewOverlayName, vr::VROverlayHandle_t* pSubviewOverlayHandle);
+
+	/** Positions a subview overlay to a position within the parent overlay, from the top-left corners of each overlay, in the pixel coordinate space of the parent standalone overlay. */
+	virtual vr::EVROverlayError SetSubviewPosition( vr::VROverlayHandle_t ulOverlayHandle, float fX, float fY );
 
 	/** Destroys the specified overlay. When an application calls VR_Shutdown all overlays created by that app are
 	 * automatically destroyed. */
