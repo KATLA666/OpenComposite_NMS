@@ -33,6 +33,7 @@ OculusTouchInteractionProfile::OculusTouchInteractionProfile()
 
 	const char* perHandPaths[] = {
 		"/input/squeeze/value",
+		"/input/squeeze/click", //katla66
 		"/input/trigger/value",
 		"/input/trigger/touch",
 		"/input/thumbstick/x",
@@ -58,12 +59,22 @@ OculusTouchInteractionProfile::OculusTouchInteractionProfile()
 	this->pathTranslationMap = {
 		{ "grip", "squeeze" },
 		{ "joystick", "thumbstick" },
+		{ "rightjoystick-touch_controller-dpad-parent", "rightthumbstick-touch_controller-dpad-parent" }, // katla66
+		{ "leftjoystick-touch_controller-dpad-parent", "leftthumbstick-touch_controller-dpad-parent" },
 		{ "pull", "value" },
 		{ "grip/click", "squeeze/value" },
+		/* { "grip/click", "squeeze/click" }, // katla66 squeeze/value
+		{ "input/grip/click", "input/squeeze/click" }, // Falls NMS den absoluten Pfad pollt
+		{ "input/grip/pull", "input/squeeze/value" },
+		{ "input/grip/value", "input/squeeze/value" },
 		{ "grip/force", "squeeze/value" },
-		{ "grip/value", "squeeze/value" },
+		{ "grip/value", "squeeze/value" }, */
 		{ "trigger/click", "trigger/value" },
-		{ "application_menu", "menu" }
+		{ "application_menu", "menu" },
+
+		{ "squeeze/click", "squeeze/value" }, //katla66
+		{ "input/squeeze/click", "input/squeeze/value" },
+		{ "squeeze/force", "squeeze/value" }
 	};
 	// TODO implement the poses through the interaction profile (the raw pose is hard-coded in BaseInput at the moment):
 	// pose/raw

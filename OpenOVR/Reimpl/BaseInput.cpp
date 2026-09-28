@@ -40,6 +40,19 @@ using namespace vr;
 
 // On Android, the application must supply a function to load the contents of a file
 
+
+//DEBUG katla66
+#include <iostream>
+#include <windows.h> // Wichtig für OutputDebugStringA
+
+static vr::VRActionHandle_t dbg_shipRight = 0;
+static std::string dbg_lastActionSets = "";
+
+// --- NMS SKELETAL OVERRIDE --- katla66
+float g_NmsDigitalGripLeft = 0.0f;
+float g_NmsDigitalGripRight = 0.0f;
+// -----------------------------
+
 /**
  * Macro for creating an Action object from a handle and verifying isn't invalid.
  * If it is invalid, it will cause the surrounding function to return VRInputError_InvalidHandle.
@@ -353,6 +366,14 @@ void BaseInput::setStartupManifest(std::string manifest)
 	if (auto input = GetUnsafeBaseInput(); input) {
 		input->SetActionManifestPath(startupManifest.c_str());
 	}
+}
+
+EVRInputError BaseInput::GetEyeTrackingDataRelativeToNow(VRActionHandle_t action, vr::ETrackingUniverseOrigin eOrigin, float fPredictedSecondsFromNow, vr::VREyeTrackingData_t* pEyeTrackingData, uint32_t ulEyeTrackingDataSize) {
+	return EVRInputError::VRInputError_None;
+}
+
+EVRInputError BaseInput::GetEyeTrackingDataForNextFrame(VRActionHandle_t action, vr::ETrackingUniverseOrigin eOrigin, vr::VREyeTrackingData_t* pEyeTrackingData, uint32_t ulEyeTrackingDataSize) {
+	return EVRInputError::VRInputError_None;
 }
 
 EVRInputError BaseInput::SetActionManifestPath(const char* pchActionManifestPath)
@@ -1251,6 +1272,15 @@ EVRInputError BaseInput::GetActionSetHandle(const char* pchActionSetName, VRActi
 EVRInputError BaseInput::GetActionHandle(const char* pchActionName, VRActionHandle_t* pHandle)
 {
 	*pHandle = actions.LookupHandle(pchActionName);
+	/* OOVR_LOGF("ACTION-REGISTRY: Pfad = %s  --->  Handle = %llu", // katla66
+	    pchActionName,
+	    (unsigned long long)*pHandle);
+		*/
+	std::string actName = pchActionName;
+	if (actName.find("shipcontrols_right/in/interact") != std::string::npos) {
+		dbg_shipRight = *pHandle;
+		OOVR_LOGF("[NMS] FOUND HANDLE: %llu", (unsigned long long)dbg_shipRight);
+	}
 	return vr::VRInputError_None;
 }
 
@@ -1298,6 +1328,20 @@ EVRInputError BaseInput::UpdateActionState(VR_ARRAY_COUNT(unSetCount) VRActiveAc
     uint32_t unSizeOfVRSelectedActionSet_t, uint32_t unSetCount)
 {
 	// TODO if the game is using legacy input, call this every frame
+	std::string currentSets = ""; // katla66 debug
+	for (uint32_t i = 0; i < unSetCount; i++) {
+		GET_ACTION_SET_FROM_HANDLE(asLog, pSets[i].ulActionSet);
+		//currentSets += asLog->fullName + " ";
+		currentSets += asLog->fullName + "(prio=" + std::to_string(pSets[i].nPriority) + ",restrict=" + std::to_string(pSets[i].ulRestrictedToDevice) + ") ";
+	}
+
+	// Nur loggen, wenn sich das Set ändert (z.B. vom Planeten ins Cockpit)
+	if (currentSets != dbg_lastActionSets) {
+		char msg[512];
+		snprintf(msg, sizeof(msg), "[NMS_SETS] Action Sets switched to: %s\n", currentSets.c_str());
+		OutputDebugStringA(msg);
+		dbg_lastActionSets = currentSets;
+	}
 
 	OOVR_FALSE_ABORT(sizeof(*pSets) == unSizeOfVRSelectedActionSet_t);
 
@@ -1331,6 +1375,36 @@ EVRInputError BaseInput::UpdateActionState(VR_ARRAY_COUNT(unSetCount) VRActiveAc
 		}
 	}
 
+	// --- DER FIX: Kein push_back! Einfach das bereits erstellte letzte Element sauber befüllen --- katla66
+	aas[unSetCount].actionSet = legacyInputsSet;
+	aas[unSetCount].subactionPath = XR_NULL_PATH;
+
+	XrActionsSyncInfo syncInfo = { XR_TYPE_ACTIONS_SYNC_INFO };
+	syncInfo.activeActionSets = aas.data();
+	syncInfo.countActiveActionSets = aas.size(); // Ist nun exakt unSetCount + 1
+
+	// --- KORRIGIERTE PROBE 1: ACTION SET SYNC --- katla66
+	/*
+	for (uint32_t i = 0; i < unSetCount; i++) {
+		GET_ACTION_SET_FROM_HANDLE(asLog, pSets[i].ulActionSet);
+		currentSets += asLog->name + "|"; // Nutzt name statt fullName für kompakteres Log
+	}
+
+	static std::string lastLoggedSets = "";
+	if (currentSets != lastLoggedSets) {
+		char msg[512];
+		snprintf(msg, sizeof(msg), "[NMS_SETS] Active Sets: %s\n", currentSets.c_str());
+		OutputDebugStringA(msg);
+		lastLoggedSets = currentSets;
+	}
+	*/
+	// --------------------------------------------
+
+	// Falls es hier fehlschlägt, friert NMS ein. Mit dem korrekten Array klappt es nun.
+	OOVR_FAILED_XR_ABORT(xrSyncActions(xr_session.get(), &syncInfo));
+	syncSerial++;
+
+	/*
 	// Ad the last set, the legacy input set
 	aas.at(unSetCount).actionSet = legacyInputsSet;
 
@@ -1338,7 +1412,8 @@ EVRInputError BaseInput::UpdateActionState(VR_ARRAY_COUNT(unSetCount) VRActiveAc
 	syncInfo.activeActionSets = aas.data();
 	syncInfo.countActiveActionSets = aas.size();
 	OOVR_FAILED_XR_ABORT(xrSyncActions(xr_session.get(), &syncInfo));
-	syncSerial++;
+	syncSerial++; 
+	*/
 
 	for (size_t i = 0; i < allSubactionPaths.size(); i++) {
 		auto handDevice = BackendManager::Instance().GetBackendInstance()->GetDeviceByHand(static_cast<ITrackedDevice::TrackedDeviceType>(i));
@@ -1484,10 +1559,18 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 			}
 		}
 
-	// dpad bindings: need to read parent state(s) and fill in state ourselves
+// dpad bindings: need to read parent state(s) and fill in state ourselves
 	if (!perProfileData.dpadBindings.empty())
 		for (auto& [parent_name, dpad_info] : action.perProfileData[profile].dpadBindings) {
-			// read state of parent
+
+			// --- NEUER FIX: LEFTSSTICK-MOVE SCHÜTZEN ---
+			// Wenn der parent_name "move" enthält (unser linker Stick),
+			// dürfen wir ihn nicht als DPAD behandeln, sonst killen wir die Analog-Daten.
+			//if (parent_name.find("move") != std::string::npos) {
+			//	continue;
+			//}
+			// -------------------------------------------
+			// 1. Lese den Status des Parents
 			XrActionStateVector2f parent_state = { XR_TYPE_ACTION_STATE_VECTOR2F };
 			auto iter = DpadBindingInfo::parents.find(parent_name);
 			OOVR_FALSE_ABORT(iter != DpadBindingInfo::parents.end());
@@ -1495,39 +1578,65 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 			info2.action = iter->second.vectorAction;
 			OOVR_FAILED_XR_ABORT(xrGetActionStateVector2f(xr_session.get(), &info2, &parent_state));
 
+			// --- NEUER FIX 1: ACTION-SET BYPASS (KORRIGIERT) ---
+			// Wenn NMS das DPAD-Parent in ein inaktives Set gesperrt hat (z.B. Frontend),
+			// suchen wir eine aktive Analog-Aktion, aber STRENG getrennt nach Hand!
+			
+			if (!parent_state.isActive) {
+				//bool isRightHand = (parent_name.find("right") != std::string::npos);
+
+				if (true) {
+					for (auto& otherAction : actions.GetItems()) {
+						if (otherAction->type != ActionType::Vector2 || otherAction->xr == XR_NULL_HANDLE)
+							continue;
+						if (otherAction->fullName.find("camera") == std::string::npos)
+							continue;
+
+						XrActionStateGetInfo fallbackInfo = *getInfo;
+						fallbackInfo.action = otherAction->xr;
+						// TODO: subactionPath ggf. explizit setzen, falls die camera-Action
+						// anders instanziiert ist als das ursprüngliche getInfo.
+
+						XrActionStateVector2f fallbackState = { XR_TYPE_ACTION_STATE_VECTOR2F };
+						if (xrGetActionStateVector2f(xr_session.get(), &fallbackInfo, &fallbackState) == XR_SUCCESS
+						    && fallbackState.isActive) {
+							parent_state = fallbackState;
+							break;
+						}
+					}
+				}
+				// Kein linker/move-Zweig mehr: move braucht diesen Fallback nicht,
+				// und war der einzige Ort, der ihn live angefasst hat.
+			}
+			
+			// ---------------------------------------------------
+
 			compoundLastState |= dpad_info.lastState;
 			if (!parent_state.isActive)
 				continue;
 			state->isActive = XR_TRUE;
 
-			// convert to polar coordinates
-			// angle is in radians
+			// Winkel und Radius berechnen
 			float radius = sqrtf(powf(parent_state.currentState.x, 2) + powf(parent_state.currentState.y, 2));
 			float angle = atan2f(parent_state.currentState.y, parent_state.currentState.x);
 
-			// note: since the range of atan2 is (-pi, pi), the east and west directions will have points between the negative and positive portions (if you think of the dpad as a circle)
 			bool within_bounds = false;
 			switch (dpad_info.direction) {
-			case DpadBindingInfo::Direction::CENTER: {
+			case DpadBindingInfo::Direction::CENTER:
 				within_bounds = (radius <= DpadBindingInfo::dpadDeadzoneRadius);
 				break;
-			}
-			case DpadBindingInfo::Direction::NORTH: {
+			case DpadBindingInfo::Direction::NORTH:
 				within_bounds = (radius > DpadBindingInfo::dpadDeadzoneRadius) && (angle > DpadBindingInfo::angle45deg && angle <= DpadBindingInfo::angle135deg);
 				break;
-			}
-			case DpadBindingInfo::Direction::WEST: {
+			case DpadBindingInfo::Direction::WEST:
 				within_bounds = (radius > DpadBindingInfo::dpadDeadzoneRadius) && (angle > DpadBindingInfo::angle135deg || angle <= -DpadBindingInfo::angle135deg);
 				break;
-			}
-			case DpadBindingInfo::Direction::SOUTH: {
+			case DpadBindingInfo::Direction::SOUTH:
 				within_bounds = (radius > DpadBindingInfo::dpadDeadzoneRadius) && (angle > -DpadBindingInfo::angle135deg && angle <= -DpadBindingInfo::angle45deg);
 				break;
-			}
-			case DpadBindingInfo::Direction::EAST: {
+			case DpadBindingInfo::Direction::EAST:
 				within_bounds = (radius > DpadBindingInfo::dpadDeadzoneRadius) && (angle > -DpadBindingInfo::angle45deg && angle <= DpadBindingInfo::angle45deg);
 				break;
-			}
 			}
 
 			bool active;
@@ -1553,9 +1662,20 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 				OOVR_FAILED_XR_ABORT(xrGetActionStateBoolean(xr_session.get(), &info2, &touch_state));
 				active = touch_state.currentState;
 			} else {
-				// touch dpad, but our dpad parent doesn't have a touch input
 				active = true;
 			}
+
+			// --- NEUER FIX 2: SMART TOUCH OVERRIDE ---
+			// Wenn die kapazitiven Touch-Sensoren fehlschlagen, erzwingen wir die Aktion nur,
+			// wenn der Radius die Deadzone verlässt UND es sich um den RECHTEN Stick (Kamera/Snap-Turn) handelt.
+			// Der linke Stick bleibt unangetastet, damit das Laufen nicht vom HUD blockiert wird!
+			if (radius > DpadBindingInfo::dpadDeadzoneRadius) {
+				if (parent_name.find("right") != std::string::npos) {
+					active = true;
+				}
+			}
+			// -----------------------------------------
+
 			bool currentState = active && within_bounds;
 			if (currentState)
 				state->currentState = XR_TRUE;
@@ -1585,7 +1705,343 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 	return XR_SUCCESS;
 }
 
+//-------------------- DEBUGGING --------------------// katla66
+
+#include <iomanip>
+#include <sstream>
+
+// Hilfsfunktion für den Speicherdump
+static std::string DumpHex(void* data, size_t size)
+{
+	if (!data || size == 0)
+		return "NULL";
+	unsigned char* p = static_cast<unsigned char*>(data);
+	std::stringstream ss;
+	for (size_t i = 0; i < size && i < 64; ++i) { // Limitiert auf 64 Byte für saubere Logs
+		ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << (int)p[i] << " ";
+	}
+	return ss.str();
+}
+
+//------------------- DEBUGGING -------------------//
+
 EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigitalActionData_t* pActionData, uint32_t unActionDataSize,
+    VRInputValueHandle_t ulRestrictToDevice)
+{
+	GET_ACTION_FROM_HANDLE(act, action);
+
+	ZeroMemory(pActionData, unActionDataSize);
+	OOVR_FALSE_ABORT(unActionDataSize == sizeof(*pActionData));
+
+	XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
+	getInfo.action = act->xr;
+
+	bool anyActive = false;
+	bool anyState = false;
+	bool anyChanged = false;
+	VRInputValueHandle_t bestOrigin = vr::k_ulInvalidInputValueHandle;
+
+	for (size_t i = 0; i < allSubactionPaths.size(); i++) {
+		XrPath subactionPath = allSubactionPaths[i];
+
+		if (!checkRestrictToDevice(ulRestrictToDevice, subactionPath))
+			continue;
+
+		getInfo.subactionPath = subactionPath;
+		XrActionStateBoolean state = { XR_TYPE_ACTION_STATE_BOOLEAN };
+		OOVR_FAILED_XR_ABORT(getBooleanOrDpadData(handInteractionProfiles[i], *act, &getInfo, &state));
+
+		if (state.isActive) {
+			anyActive = true;
+
+			// Der erste gefundene "Pressed"-Status gewinnt den Origin
+			if (state.currentState && !anyState) {
+				//bestOrigin = activeOriginFromSubaction(act, allSubactionPathNames[i].c_str());
+				GetInputSourceHandle(allSubactionPathNames[i].c_str(), &bestOrigin);
+			}
+
+			// Aggregate (OR-Verknüpfung) behebt den Dropped-Release Bug!
+			anyState |= state.currentState;
+			anyChanged |= state.changedSinceLastSync;
+		}
+	}
+
+	pActionData->bActive = anyActive;
+	pActionData->bState = anyState;
+
+	// --- FIX: DER "FLAG-EATER" SYNC-TRACKER ---
+	// Koppelt das bChanged-Signal strikt an den OpenXR-Frame,
+	// damit Multi-Polling von Havok das Event nicht auffrisst.
+	struct CacheKey {
+		vr::VRActionHandle_t action;
+		vr::VRInputValueHandle_t device;
+		bool operator<(const CacheKey& o) const
+		{
+			return action < o.action || (action == o.action && device < o.device);
+		}
+	};
+
+	static std::map<CacheKey, bool> nms_lastState;
+	static std::map<CacheKey, uint64_t> nms_lastChangedSerial;
+	static std::map<CacheKey, uint64_t> nms_evaluatedSerial;
+
+	CacheKey key = { action, ulRestrictToDevice };
+
+	if (nms_evaluatedSerial[key] != syncSerialDigital) {
+		if (anyState != nms_lastState[key]) {
+			nms_lastChangedSerial[key] = syncSerialDigital;
+		}
+		nms_lastState[key] = anyState;
+		nms_evaluatedSerial[key] = syncSerialDigital;
+	}
+
+	pActionData->bChanged = (nms_lastChangedSerial[key] == syncSerialDigital);
+	// ------------------------------------------
+
+	if (ulRestrictToDevice != vr::k_ulInvalidInputValueHandle) { //katla66
+		// Wenn NMS explizit nach einer Hand fragt, gib exakt diese Hand als Origin zurück!
+		pActionData->activeOrigin = ulRestrictToDevice;
+	} else if (anyActive) {
+		if (bestOrigin != vr::k_ulInvalidInputValueHandle) {
+			pActionData->activeOrigin = bestOrigin;
+		} else {
+			GetInputSourceHandle(allSubactionPathNames[0].c_str(), &pActionData->activeOrigin);
+		}
+	}
+
+	// Skeletal Override Trigger (Falls du ihn noch nutzt)
+	if (act->fullName.find("interact") != std::string::npos) {
+		extern float g_NmsDigitalGripLeft;
+		extern float g_NmsDigitalGripRight;
+		if (act->fullName.find("left") != std::string::npos) {
+			g_NmsDigitalGripLeft = pActionData->bState ? 1.0f : 0.0f;
+		} else {
+			g_NmsDigitalGripRight = pActionData->bState ? 1.0f : 0.0f;
+		}
+	}
+
+	// --- PROBE 1: CLICK ORIGIN --- katla66
+	/*
+	if (pActionData->bChanged && pActionData->bState) {
+		if (act->shortName.find("interact") != std::string::npos) {
+			char msg[256];
+			snprintf(msg, sizeof(msg), "[NMS_PROBE_CLICK] Act: %s | Origin-Handle: %llu | Active: %d\n",
+			    act->shortName.c_str(),
+			    (unsigned long long)pActionData->activeOrigin,
+			    pActionData->bActive);
+			OutputDebugStringA(msg);
+		}
+	}
+	*/
+	// -----------------------------
+
+	pActionData->fUpdateTime = 0.0f; //katla66
+
+	// --- DIAGNOSTIC OVERRIDE (BRUTE-FORCE GRAB) --- // katla66
+	// Greift bei /actions/shipcontrols_right/in/interact und interactleft
+	//Fehlgeschagen, das Problem liegt wahrscheinlich irgendwo im LegayAPI Pfad
+	// ----------------------------------------------
+
+	return vr::VRInputError_None;
+}
+
+/*
+EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigitalActionData_t* pActionData, uint32_t unActionDataSize,
+    VRInputValueHandle_t ulRestrictToDevice)
+{
+	GET_ACTION_FROM_HANDLE(act, action);
+
+	ZeroMemory(pActionData, unActionDataSize);
+	OOVR_FALSE_ABORT(unActionDataSize == sizeof(*pActionData));
+
+	XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
+	getInfo.action = act->xr;
+
+	// Alle Subactions durchgehen (Links/Rechts)
+	for (size_t i = 0; i < allSubactionPaths.size(); i++) {
+		XrPath subactionPath = allSubactionPaths[i];
+
+		if (!checkRestrictToDevice(ulRestrictToDevice, subactionPath))
+			continue;
+
+		getInfo.subactionPath = subactionPath;
+		XrActionStateBoolean state = { XR_TYPE_ACTION_STATE_BOOLEAN };
+		OOVR_FAILED_XR_ABORT(getBooleanOrDpadData(handInteractionProfiles[i], *act, &getInfo, &state));
+
+		const bool nowActive = state.isActive && !pActionData->bActive;
+		const bool nowSet = state.currentState && !pActionData->bState;
+		if (!nowActive && !nowSet)
+			continue;
+
+		pActionData->bState = state.currentState;
+		pActionData->bActive = state.isActive;
+		pActionData->bChanged = state.changedSinceLastSync;
+
+		pActionData->activeOrigin = activeOriginFromSubaction(act, allSubactionPathNames[i].c_str());
+	}
+	 //-------- katla66
+	struct CacheKey {
+		vr::VRActionHandle_t action;
+		vr::VRInputValueHandle_t device;
+		bool operator<(const CacheKey& o) const
+		{
+			return action < o.action || (action == o.action && device < o.device);
+		}
+	};
+
+	static std::map<CacheKey, bool> nms_lastState;
+	static std::map<CacheKey, uint64_t> nms_lastChangedSerial;
+	static std::map<CacheKey, uint64_t> nms_evaluatedSerial;
+
+	CacheKey key = { action, ulRestrictToDevice };
+	bool currentState = pActionData->bState;
+
+	if (nms_evaluatedSerial[key] != syncSerialDigital) {
+		if (currentState != nms_lastState[key]) {
+			nms_lastChangedSerial[key] = syncSerialDigital;
+		}
+		nms_lastState[key] = currentState;
+		nms_evaluatedSerial[key] = syncSerialDigital;
+	}
+
+	pActionData->bChanged = (nms_lastChangedSerial[key] == syncSerialDigital);
+
+	
+	// --- NMS FRAME-SYNC ZUSTANDS-TRACKER ---
+	// Da NMS auf demselben Thread (TID 3516) mehrfach pro Frame abfragt,
+	// koppeln wir das bChanged-Signal strikt an den OpenXR Sync-Frame!
+	static std::unordered_map<vr::VRActionHandle_t, bool> nms_lastState;
+	static std::unordered_map<vr::VRActionHandle_t, uint64_t> nms_lastChangedSerial;
+	static std::unordered_map<vr::VRActionHandle_t, uint64_t> nms_evaluatedSerial;
+
+	bool currentState = pActionData->bState;
+
+	// Nur beim allerersten Aufruf innerhalb eines neuen Sync-Frames evaluieren
+	if (nms_evaluatedSerial[action] != syncSerialDigital) {
+		if (currentState != nms_lastState[action]) {
+			nms_lastChangedSerial[action] = syncSerialDigital;
+		}
+		nms_lastState[action] = currentState;
+		nms_evaluatedSerial[action] = syncSerialDigital;
+	}
+
+	// Für ALLE NMS-Abfragen im selben Sync-Frame bleibt bChanged = true!
+	pActionData->bChanged = (nms_lastChangedSerial[action] == syncSerialDigital); 
+	
+
+	// Override für Inaktivität (Falls OpenXR das Set stummschaltet, aber noch gegriffen wurde)
+	if (!pActionData->bActive && nms_lastState[key]) {
+		pActionData->bActive = true;
+		pActionData->bState = false;
+		pActionData->bChanged = true;
+		nms_lastState[key] = false;
+	}
+	// ---------------------------------------
+
+	// --- KATLA66 TIME-FIX ---
+	//static auto oc_start_time = std::chrono::steady_clock::now();
+	//pActionData->fUpdateTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - oc_start_time).count();
+	// ------------------------
+
+	// --- EXTREM-LOGGER FÜR COCKPIT RACE-CONDITIONS ---
+	if (act->fullName.find("shipcontrols") != std::string::npos && act->fullName.find("interact") != std::string::npos) {
+
+		static uint64_t callCounter = 0;
+		callCounter++;
+
+		// --- DEBUG PROBE 4: RESTRICTION CHECK --- katla66
+		std::shared_ptr<ITrackedDevice> reqDev = nullptr;
+		if (ulRestrictToDevice != vr::k_ulInvalidInputValueHandle) {
+			reqDev = ivhToDev(ulRestrictToDevice);
+		}
+		char msg2[256];
+		snprintf(msg2, sizeof(msg2),
+		    "[DEBUG_NMS_RESTRICT] RestrictHandle: %llu | TargetHand: %d | FoundActive: %d\n",
+		    (unsigned long long)ulRestrictToDevice,
+		    reqDev ? reqDev->GetHand() : -1,
+		    pActionData->bActive);
+		OutputDebugStringA(msg2);
+		// ----------------------------------------
+
+		// Hochpräzise Zeitmessung
+		auto now = std::chrono::high_resolution_clock::now();
+		static auto startTime = now;
+		double msSinceStart = std::chrono::duration<double, std::milli>(now - startTime).count();
+
+		// Thread-ID abfragen
+		DWORD threadId = GetCurrentThreadId();
+
+		// Rohe OXR Hardware-Daten
+		XrActionStateFloat oxrState = { XR_TYPE_ACTION_STATE_FLOAT };
+		XrActionStateGetInfo info = { XR_TYPE_ACTION_STATE_GET_INFO };
+		info.action = act->xr;
+		xrGetActionStateFloat(xr_session.get(), &info, &oxrState);
+
+		// Lesbarer Name
+		const char* side = (act->fullName.find("interactleft") != std::string::npos) ? "LEFT " : "RIGHT";
+
+		// Log zusammenbauen (extrem effizient, triggert den Watchdog nicht)
+		char msg[512];
+		snprintf(msg, sizeof(msg),
+		    "[NMS_EXT] #%llu | T:%.2fms | TID:%lu | Sync:%llu | %s | OXR(A:%d V:%.2f) | NMS(A:%d S:%d C:%d) | Time:%.3f\n",
+		    callCounter, msSinceStart, threadId, syncSerialDigital, side,
+		    oxrState.isActive, oxrState.currentState,
+		    pActionData->bActive, pActionData->bState, pActionData->bChanged, pActionData->fUpdateTime);
+
+		OutputDebugStringA(msg);
+	}
+	// -------------------------------------------------
+
+	// --- SKELETAL CAPTURE (Grip-Status an die Fingeranimation funken) ---
+	if (act->fullName.find("interact") != std::string::npos) {
+		if (act->fullName.find("left") != std::string::npos) {
+			g_NmsDigitalGripLeft = pActionData->bState ? 1.0f : 0.0f;
+		} else {
+			g_NmsDigitalGripRight = pActionData->bState ? 1.0f : 0.0f;
+		}
+	}
+	// --------------------------------------------------------------------
+
+	// --- DEBUG PROBE: GRAB DIAGNOSTICS --- katla66
+	if (pActionData->bChanged && pActionData->bState) {
+		if (act->fullName.find("interact") != std::string::npos) {
+			bool isRight = (act->fullName.find("right") != std::string::npos);
+			ITrackedDevice::TrackedDeviceType handEnum = isRight ? ITrackedDevice::HAND_RIGHT : ITrackedDevice::HAND_LEFT;
+
+			std::shared_ptr<ITrackedDevice> dev = BackendManager::Instance().GetDeviceByHand(handEnum);
+			if (dev) {
+				// 1. Hole Koordinaten im stehenden und sitzenden Raum
+				vr::TrackedDevicePose_t seatedPose = {};
+				dev->GetPose(vr::TrackingUniverseSeated, &seatedPose, ETrackingStateType::TrackingStateType_Now);
+				vr::TrackedDevicePose_t standPose = {};
+				dev->GetPose(vr::TrackingUniverseStanding, &standPose, ETrackingStateType::TrackingStateType_Now);
+
+				// 2. Hole Finger-Krümmung (Ist es eine Faust?)
+				VRSkeletalSummaryData_t skeletonData{};
+				if (xr_gbl->handTrackingProperties.supportsHandTracking) {
+					getRealSkeletalSummary(handEnum, &skeletonData);
+				} else {
+					getEstimatedSkeletalSummary(handEnum, &skeletonData);
+				}
+
+				char diagMsg[512];
+				snprintf(diagMsg, sizeof(diagMsg),
+				    "[NMS_DIAG] GRAB ATTEMPT! Act: %s | Z-Seated: %.2f | Z-Stand: %.2f | FingerCurl: %.2f\n",
+				    act->shortName.c_str(),
+				    seatedPose.mDeviceToAbsoluteTracking.m[2][3],
+				    standPose.mDeviceToAbsoluteTracking.m[2][3],
+				    skeletonData.flFingerCurl[1]);
+				OutputDebugStringA(diagMsg);
+			}
+		}
+	}
+	// -------------------------------------
+
+	return vr::VRInputError_None;
+}
+*/
+
+/* EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigitalActionData_t* pActionData, uint32_t unActionDataSize,
     VRInputValueHandle_t ulRestrictToDevice)
 {
 	GET_ACTION_FROM_HANDLE(act, action);
@@ -1617,6 +2073,13 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 		pActionData->bState = state.currentState;
 		pActionData->bActive = state.isActive;
 		pActionData->bChanged = state.changedSinceLastSync;
+
+		// --- NEUER NMS PHYSIK-FIX ---katla666 implementing fUpdateTime
+		// Wir zwingen einen realen, fortlaufenden Zeitstempel in das fUpdateTime-Feld.
+		// Ohne das blockiert die NMS-Physik-Engine alle physischen Greifaktionen!
+		//static auto oc_start_time = std::chrono::steady_clock::now();
+		//pActionData->fUpdateTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - oc_start_time).count();
+		// ----------------------------
 		// TODO implement fUpdateTime
 		pActionData->activeOrigin = activeOriginFromSubaction(act, allSubactionPathNames[i].c_str());
 	}
@@ -1634,10 +2097,40 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 	// Note it's possible we didn't set any output if this action isn't bound to anything, just leave the
 	//  struct at it's default values.
 
+	// --- COCKPIT BUTTON LOGGER --- katla66 pos
+	/*
+	if (act->fullName.find("shipcontrols") != std::string::npos) {
+		std::stringstream ssDigital;
+		ssDigital << "[NMS_SHIP_BTN] " << act->fullName
+		          << " | Active: " << pActionData->bActive
+		          << " | State (Pressed): " << pActionData->bState << "\n";
+		OutputDebugStringA(ssDigital.str().c_str());
+	}
+	*/
+	// -----------------------------
+
+	// --- MATCH LOGGER 1: Welches Handle hat der Klick? --- katla66
+	/*
+	if (act->fullName.find("shipcontrols_right/in/interact") != std::string::npos) {
+		std::stringstream ssDigital;
+		ssDigital << "[NMS_MATCH_1] Digital Click Origin: " << pActionData->activeOrigin << "\n";
+		OutputDebugStringA(ssDigital.str().c_str());
+	}
+	/
+	// -----------------------------------------------------
+
+	// Gibt dir für jeden Frame aus, welche Action NMS gerade abfragt und ob sie einen Wert liefert: katla66
+	//OOVR_LOGF("Digital Action: Handle=%llu, Wert X=%f, Active=%d",
+	//    (unsigned long long)action,
+	//    pActionData->bState,
+	//    pActionData->bActive);
+
+
 	return VRInputError_None;
 }
+*/
 
-EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalogActionData_t* pActionData, uint32_t unActionDataSize,
+ EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalogActionData_t* pActionData, uint32_t unActionDataSize,
     VRInputValueHandle_t ulRestrictToDevice)
 {
 
@@ -1651,6 +2144,7 @@ EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalo
 	// Only return the input with the greatest magnitude
 	float maxLengthSq = 0;
 	bool foundValidInput = false;
+	bool isDeviceActive = false; // katla66
 
 	for (size_t i = 0; i < allSubactionPaths.size(); i++) {
 		XrPath subactionPath = allSubactionPaths[i];
@@ -1668,6 +2162,8 @@ EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalo
 
 			if (!state.isActive)
 				continue;
+
+			isDeviceActive = true; // katla66
 
 			float length = fabs(state.currentState);
 			if (length < action_per_profile_data.deadzone)
@@ -1710,6 +2206,8 @@ EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalo
 
 			if (!state.isActive)
 				continue;
+
+			isDeviceActive = true; //katla66
 
 			float lengthSq = state.currentState.x * state.currentState.x + state.currentState.y * state.currentState.y;
 			float length = std::sqrt(lengthSq);
@@ -1772,12 +2270,28 @@ EVRInputError BaseInput::GetAnalogActionData(VRActionHandle_t action, InputAnalo
 		}
 	}
 
-	if (!foundValidInput) {
-		pActionData->bActive = false;
+	//if (!foundValidInput) {
+	//	pActionData->bActive = false;
+	//}
+	if (!foundValidInput) { //katla66
+		// Bleibt aktiv, auch wenn wir 0.0 zurückgeben!
+		pActionData->bActive = isDeviceActive;
+		pActionData->x = 0.0f;
+		pActionData->y = 0.0f;
+		pActionData->z = 0.0f;
 	}
+
+	// Gibt dir für jeden Frame aus, welche Action NMS gerade abfragt und ob sie einen Wert liefert: katla66
+	
+	/* OOVR_LOGF("Analog Action: Handle=%llu, Wert X=%f, Active=%d",
+	    (unsigned long long)action,
+	    pActionData->x,
+	    pActionData->bActive);
+		*/
 
 	return VRInputError_None;
 }
+
 
 EVRInputError BaseInput::GetPoseActionData(VRActionHandle_t action, ETrackingUniverseOrigin eOrigin, float fPredictedSecondsFromNow,
     InputPoseActionData_t* pActionData, uint32_t unActionDataSize, VRInputValueHandle_t ulRestrictToDevice)
@@ -2064,6 +2578,19 @@ EVRInputError BaseInput::GetSkeletalBoneData(VRActionHandle_t actionHandle, EVRS
 	ZeroMemory(pTransformArray, sizeof(VRBoneTransform_t) * unTransformArrayCount);
 	GET_ACTION_FROM_HANDLE(action, actionHandle);
 
+	// --- DEBUG PROBE 3B: SKELETAL STATE --- katla66
+	/*
+	static int skelLog = 0;
+	if (skelLog++ % 90 == 0) {
+		char msg[256];
+		snprintf(msg, sizeof(msg),
+		    "[DEBUG_NMS_SKEL] API GetSkeletalBoneData called for hand: %d | Space: %d\n",
+		    action->skeletalHand, eTransformSpace);
+		OutputDebugStringA(msg);
+	}
+	*/
+	// --------------------------------------
+
 	// FIXME remove
 	// Hand labs is in parent transform space, and usually 'with controller' motion range
 	// OOVR_LOGF("skeletal data %d %d", eTransformSpace, eMotionRange);
@@ -2130,6 +2657,8 @@ EVRInputError BaseInput::GetSkeletalBoneData(VRActionHandle_t actionHandle, EVRS
 	dev->SetHandTrackingValid(true);
 
 	// For now, just return with non-active data
+
+
 	return vr::VRInputError_None;
 }
 EVRInputError BaseInput::GetSkeletalSummaryData(VRActionHandle_t actionHandle, EVRSummaryType eSummaryType, VRSkeletalSummaryData_t* pSkeletalSummaryData)
@@ -2300,6 +2829,100 @@ EVRInputError BaseInput::GetActionOrigins(VRActionSetHandle_t actionSetHandle, V
 	GET_ACTION_SET_FROM_HANDLE(set, actionSetHandle);
 	GET_ACTION_FROM_HANDLE(act, digitalActionHandle);
 
+	if (act->set != set) {
+		OOVR_ABORTF("GetActionOrigins: set mismatch %s vs %s", set->name.c_str(), act->fullName.c_str());
+	}
+
+	ZeroMemory(originsOut, originOutCount * sizeof(*originsOut));
+
+	std::set<std::string> sources;
+
+	if (act->xr != XR_NULL_HANDLE) {
+		XrBoundSourcesForActionEnumerateInfo info = { XR_TYPE_BOUND_SOURCES_FOR_ACTION_ENUMERATE_INFO };
+		info.action = act->xr;
+
+		XrPath tmp[20];
+		uint32_t count = 0;
+		if (xrEnumerateBoundSourcesForAction(xr_session.get(), &info, std::size(tmp), &count, tmp) == XR_SUCCESS) {
+			char buff[XR_MAX_PATH_LENGTH + 1];
+			for (uint32_t i = 0; i < count; i++) {
+				uint32_t len;
+				if (xrPathToString(xr_instance, tmp[i], XR_MAX_PATH_LENGTH, &len, buff) == XR_SUCCESS) {
+					std::string path(buff, len);
+					int endOfHandPos = path.find('/', strlen("/user/hand/") + 1);
+					if (endOfHandPos != std::string::npos) {
+						path.erase(endOfHandPos);
+					}
+					sources.insert(std::move(path));
+				}
+			}
+		}
+	}
+
+	// --- DER COCKPIT & SKELETON FALLBACK --- katla66
+	// Wenn OpenXR keine Handles liefert (z.B. bei Skelett-Abfragen im Schiff),
+	// zwingen wir das System, die richtige Hand anhand des Namens zu übermitteln!
+	/*
+	if (sources.empty()) {
+		std::string actionName = act->fullName;
+		std::transform(actionName.begin(), actionName.end(), actionName.begin(), ::tolower);
+
+		if (actionName.find("left") != std::string::npos) {
+			sources.insert("/user/hand/left");
+		} else if (actionName.find("right") != std::string::npos) {
+			sources.insert("/user/hand/right");
+		} else {
+			sources.insert("/user/hand/left");
+			sources.insert("/user/hand/right");
+		}
+	}
+	*/
+	// ---------------------------------------
+
+	uint32_t outIndex = 0;
+	for (const std::string& path : sources) {
+		if (outIndex >= originOutCount)
+			return vr::VRInputError_MaxCapacityReached;
+		if (GetInputSourceHandle(path.c_str(), &originsOut[outIndex]) == vr::VRInputError_None) {
+			outIndex++;
+		}
+	}
+
+
+	// --- COCKPIT ORIGIN LOGGER --- katla66 pos
+	/*
+	if (act->fullName.find("shipcontrols") != std::string::npos) {
+		std::stringstream ssOrigins;
+		ssOrigins << "[NMS_SHIP_ORIGIN] " << act->fullName
+		          << " | Handle count: " << outIndex;
+
+		// Logge die generierten Handles
+		for (uint32_t j = 0; j < outIndex; j++) {
+			ssOrigins << " | Hnd[" << j << "]: " << originsOut[j];
+		}
+		ssOrigins << "\n";
+		OutputDebugStringA(ssOrigins.str().c_str());
+	}
+	*/
+	// -------------------------------
+
+	// --- MATCH LOGGER 2: Welches Handle erwartet das Spiel? ---
+	if (act->fullName.find("shipcontrols_right/in/interact") != std::string::npos) {
+		std::stringstream ssOrigins;
+		ssOrigins << "[NMS_MATCH_2] Skeleton Origin Generated: " << (outIndex > 0 ? originsOut[0] : 0) << "\n";
+		OutputDebugStringA(ssOrigins.str().c_str());
+	}
+	// ----------------------------------------------------------
+
+	return VRInputError_None;
+}
+
+/* EVRInputError BaseInput::GetActionOrigins(VRActionSetHandle_t actionSetHandle, VRActionHandle_t digitalActionHandle,
+    VR_ARRAY_COUNT(originOutCount) VRInputValueHandle_t* originsOut, uint32_t originOutCount)
+{
+	GET_ACTION_SET_FROM_HANDLE(set, actionSetHandle);
+	GET_ACTION_FROM_HANDLE(act, digitalActionHandle);
+
 	// TODO find something that passes in non-matching values and see what results it wants, or try it with SteamVR
 	if (act->set != set) {
 		OOVR_ABORTF("GetActionOrigins: set mismatch %s vs %s", set->name.c_str(), act->fullName.c_str());
@@ -2334,6 +2957,26 @@ EVRInputError BaseInput::GetActionOrigins(VRActionSetHandle_t actionSetHandle, V
 		sources.insert(std::move(path));
 	}
 
+	// --- NEUER COCKPIT-BYPASS (SICHER INTEGRIERT) --- katla66 // 
+	// Wenn OpenXR keine Bindings zurückgibt (count == 0), zwingen wir das System,
+	// die korrekte Hand anhand des Namens zu generieren. Das ist für NMS überlebenswichtig!
+	if (sources.empty()) {
+		std::string actionName = act->fullName;
+		std::transform(actionName.begin(), actionName.end(), actionName.begin(), ::tolower);
+
+		if (actionName.find("left") != std::string::npos) {
+			sources.insert("/user/hand/left");
+		} else if (actionName.find("right") != std::string::npos) {
+			sources.insert("/user/hand/right");
+		} else {
+			// Wenn NMS eine generische Aktion abfragt (z.B. "interact"),
+			// geben wir sicherheitshalber beide Hände zurück.
+			sources.insert("/user/hand/left");
+			sources.insert("/user/hand/right");
+		}
+	}
+	// ------------------------------------------------
+
 	// Copy out the sources
 	uint32_t i = 0;
 	for (const std::string& path : sources) {
@@ -2345,6 +2988,8 @@ EVRInputError BaseInput::GetActionOrigins(VRActionSetHandle_t actionSetHandle, V
 
 	return VRInputError_None;
 }
+*/
+
 
 EVRInputError BaseInput::GetOriginLocalizedName(VRInputValueHandle_t origin, VR_OUT_STRING() char* pchNameArray, uint32_t unNameArraySize)
 {
@@ -2406,7 +3051,30 @@ EVRInputError BaseInput::GetOriginLocalizedName(VRInputValueHandle_t origin, VR_
 	return str[i] ? VRInputError_MaxCapacityReached : VRInputError_None;
 }
 
-EVRInputError BaseInput::GetOriginTrackedDeviceInfo(VRInputValueHandle_t origin, InputOriginInfo_t* info, uint32_t unOriginInfoSize)
+EVRInputError BaseInput::GetOriginTrackedDeviceInfo(VRInputValueHandle_t origin, InputOriginInfo_t* info, uint32_t unOriginInfoSize) //katla66, das kann eventuell wieder zurück gesetzt werden.
+{
+	memset(info, 0, unOriginInfoSize);
+	OOVR_FALSE_ABORT(unOriginInfoSize == sizeof(InputOriginInfo_t));
+
+	if (origin == vr::k_ulInvalidInputValueHandle)
+		return vr::VRInputError_InvalidHandle;
+
+	std::shared_ptr<ITrackedDevice> dev = ivhToDev(origin);
+
+	if (!dev)
+		return vr::VRInputError_InvalidHandle;
+
+	info->trackedDeviceIndex = dev->DeviceIndex();
+	info->devicePath = origin;
+
+	// FIX: Leerer String anstelle des Hardcoded-Tests.
+	// Dadurch nutzt NMS den Root-Transform des Controllers für die IK.
+	strcpy_arr(info->rchRenderModelComponentName, "");
+
+	return VRInputError_None;
+}
+
+/* EVRInputError BaseInput::GetOriginTrackedDeviceInfo(VRInputValueHandle_t origin, InputOriginInfo_t* info, uint32_t unOriginInfoSize)
 {
 	memset(info, 0, unOriginInfoSize);
 	OOVR_FALSE_ABORT(unOriginInfoSize == sizeof(InputOriginInfo_t));
@@ -2425,6 +3093,7 @@ EVRInputError BaseInput::GetOriginTrackedDeviceInfo(VRInputValueHandle_t origin,
 
 	return VRInputError_None;
 }
+*/
 
 /** Retrieves useful information about the bindings for an action */
 EVRInputError BaseInput::GetActionBindingInfo(VRActionHandle_t actionHandle, OOVR_InputBindingInfo_t* bindingInfo,
@@ -2642,6 +3311,14 @@ bool BaseInput::GetLegacyControllerState(vr::TrackedDeviceIndex_t controllerDevi
 {
 	*state = {};
 
+	//katla66
+		static uint64_t legacyCallCounter = 0;
+		char msg[256];
+		snprintf(msg, sizeof(msg), "[NMS_LEGACY] #%llu idx=%u aufgerufen\n",
+		    ++legacyCallCounter, controllerDeviceIndex);
+		OutputDebugStringA(msg);
+	
+
 	// FIXME implement packetNum
 	static int i = 0;
 	state->unPacketNum = i++; // Not exactly thread safe
@@ -2715,8 +3392,16 @@ bool BaseInput::GetLegacyControllerState(vr::TrackedDeviceIndex_t controllerDevi
 	if (xr_gbl->handTrackingProperties.supportsHandTracking) {
 		getRealSkeletalSummary((ITrackedDevice::TrackedDeviceType)hand, &skeletonData);
 	} else {
+		//getEstimatedSkeletalSummary((ITrackedDevice::TrackedDeviceType)hand, &skeletonData);
 		return true;
 	}
+
+	//katla66
+	char msg2[200];
+	snprintf(msg2, sizeof(msg2), "[NMS_LEGACY_SKEL] supportsHT=%d curl1=%.2f curl2=%.2f\n",
+	    xr_gbl->handTrackingProperties.supportsHandTracking, skeletonData.flFingerCurl[1], skeletonData.flFingerCurl[2]);
+	OutputDebugStringA(msg2);
+
 
 	VRControllerAxis_t& fingers = state->rAxis[3];
 	fingers.x = skeletonData.flFingerCurl[1] * 1.66f * 1.33f;
@@ -2725,6 +3410,18 @@ bool BaseInput::GetLegacyControllerState(vr::TrackedDeviceIndex_t controllerDevi
 	VRControllerAxis_t& fingers2 = state->rAxis[4];
 	fingers2.x = skeletonData.flFingerCurl[3] * 1.66f;
 	fingers2.y = skeletonData.flFingerCurl[4] * 1.66f;
+
+	// --- PROBE 3: LEGACY COCKPIT STATE ---
+	/*
+	static int legT = 0;
+	if (legT++ % 180 == 0) {
+		char msg[256];
+		snprintf(msg, sizeof(msg), "[NMS_PROBE_LEGACY] Hand: %d | FingerCurl(Axis3.x): %.2f | Grip(Axis2.x): %.2f\n",
+		    hand, state->rAxis[3].x, state->rAxis[2].x);
+		OutputDebugStringA(msg);
+	}
+	*/
+	// -------------------------------------
 
 	return true;
 }

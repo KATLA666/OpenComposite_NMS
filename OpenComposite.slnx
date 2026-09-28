@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+	<Configurations>
+		<BuildType Name="Debug"/>
+		<BuildType Name="Release"/>
+		<BuildType Name="MinSizeRel"/>
+		<BuildType Name="RelWithDebInfo"/>
+		<Platform Name="x64"/>
+	</Configurations>
+	<Project Path="ALL_BUILD.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="0230eea6-cf74-34c2-8819-7cc8c45712b6" DefaultStartup="true">
+		<BuildDependency Project="DrvOpenXR.vcxproj"/>
+		<BuildDependency Project="OCCore.vcxproj"/>
+		<BuildDependency Project="OCOVR.vcxproj"/>
+		<BuildDependency Project="OpenXR.vcxproj"/>
+		<BuildDependency Project="G:/OpenComposite/RuntimeSwitcher/RuntimeSwitcher.csproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="jsoncpp.vcxproj"/>
+	</Project>
+	<Project Path="DrvOpenXR.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="8dd16fde-7fa9-3f93-8dfe-63976c601c9d">
+		<BuildDependency Project="OpenXR.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="jsoncpp.vcxproj"/>
+	</Project>
+	<Project Path="INSTALL.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="1797c4a3-a591-39cd-9ee8-0ec342fa2eea">
+		<BuildDependency Project="ALL_BUILD.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<Build Solution="Debug|*" Project="false"/>
+		<Build Solution="Release|*" Project="false"/>
+		<Build Solution="MinSizeRel|*" Project="false"/>
+		<Build Solution="RelWithDebInfo|*" Project="false"/>
+	</Project>
+	<Project Path="OCCore.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="177b9e49-4826-395f-8caa-f6df16af68c5">
+		<BuildDependency Project="OpenXR.vcxproj"/>
+		<BuildDependency Project="VersionHeader.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="jsoncpp.vcxproj"/>
+	</Project>
+	<Project Path="OCOVR.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="9c0815d0-aec5-32a8-9b62-d31572cb5b1b">
+		<BuildDependency Project="DrvOpenXR.vcxproj"/>
+		<BuildDependency Project="OCCore.vcxproj"/>
+		<BuildDependency Project="OpenXR.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="jsoncpp.vcxproj"/>
+	</Project>
+	<Project Path="OpenXR.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="00ea2612-2b87-3175-83df-4034dd819057">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<BuildDependency Project="jsoncpp.vcxproj"/>
+	</Project>
+	<Project Path="G:/OpenComposite/RuntimeSwitcher/RuntimeSwitcher.csproj" Type="fae04ec0-301f-11d3-bf4b-00c04f79efbc" Id="c8666599-403c-4dc0-a4ac-f61e6f53db1d">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<Platform Project="AnyCPU"/>
+	</Project>
+	<Project Path="VersionHeader.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="4b1feed7-2af5-3858-81cf-a6b6589afd31">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="ZERO_CHECK.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="df9204b6-ec27-3680-9916-60ebad671333"/>
+	<Project Path="jsoncpp.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="b1ee3a29-d265-3876-b844-db6a25e1b13c">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+</Solution>

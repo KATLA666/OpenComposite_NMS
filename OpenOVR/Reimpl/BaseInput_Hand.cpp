@@ -289,6 +289,115 @@ static void InterpolateBone(VRBoneTransform_t& bone, const VRBoneTransform_t& ta
 	bone.orientation = { resRot.w, resRot.x, resRot.y, resRot.z };
 }
 
+static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceType hand, const LegacyControllerActions controller) //katla66
+{
+	struct ControllerState {
+		float triggerPct;
+		float gripPct;
+		float thumbTouchPct;
+		float triggerTouchPct;
+	} output;
+
+	XrActionStateGetInfo info{
+		.type = XR_TYPE_ACTION_STATE_GET_INFO,
+		.action = controller.trigger,
+		.subactionPath = XR_NULL_PATH,
+	};
+
+	XrActionStateFloat state{ XR_TYPE_ACTION_STATE_FLOAT };
+	XrActionStateBoolean stateBool{ XR_TYPE_ACTION_STATE_BOOLEAN };
+
+	constexpr float simulateCurlThreshold = 0.08f;
+
+	// Trigger State
+	XrResult actionRes = xrGetActionStateFloat(xr_session.get(), &info, &state);
+	output.triggerPct = 0.0f;
+	if (XR_SUCCEEDED(actionRes) && state.isActive && state.currentState >= simulateCurlThreshold) {
+		output.triggerPct = state.currentState;
+	} else if (XR_FAILED(actionRes)) {
+		OOVR_LOGF("WARNING: couldn't get trigger percentage (%d)", actionRes);
+	}
+
+	// Grip State
+	info.action = controller.grip;
+	actionRes = xrGetActionStateFloat(xr_session.get(), &info, &state);
+	output.gripPct = 0.0f;
+	if (XR_SUCCEEDED(actionRes) && state.isActive && state.currentState >= simulateCurlThreshold) {
+		output.gripPct = state.currentState;
+	} else if (XR_FAILED(actionRes)) {
+		OOVR_LOGF("WARNING: couldn't get grip percentage (%d)", actionRes);
+	}
+
+	// Trigger Touch State
+	info.action = controller.triggerTouch;
+	actionRes = xrGetActionStateBoolean(xr_session.get(), &info, &stateBool);
+	bool triggerTouch = XR_SUCCEEDED(actionRes) && stateBool.currentState;
+
+	// Force touch to true when trigger is being pressed
+	if (output.triggerPct != 0.0f)
+		triggerTouch = true;
+
+	bool hasThumbInput = false;
+	bool thumbTouch = false;
+
+	// Put thumb down on any relevant touch inputs
+	const XrAction thumbActions[] = { controller.menuTouch, controller.btnATouch, controller.trackpadTouch, controller.stickBtnTouch };
+	for (const auto& action : thumbActions) {
+		info.action = action;
+		actionRes = xrGetActionStateBoolean(xr_session.get(), &info, &stateBool);
+		if (XR_SUCCEEDED(actionRes)) {
+			if (stateBool.currentState) {
+				thumbTouch = true;
+			}
+			hasThumbInput = true;
+		}
+	}
+
+	// Allow for straightening the thumb on controllers with no touch inputs
+	if (!hasThumbInput) {
+		thumbTouch = output.gripPct != 1.0f || output.triggerPct == 1.0f;
+	}
+
+	static std::array<std::chrono::high_resolution_clock::time_point, 2> lastTime{
+		std::chrono::high_resolution_clock::now(),
+		std::chrono::high_resolution_clock::now()
+	};
+
+	// Calculate per-hand deltaTime for binary input interpolation
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> deltaTimeDuration = currentTime - lastTime[hand];
+	float deltaTime = deltaTimeDuration.count();
+	lastTime[hand] = currentTime;
+
+	// Interpolated states
+	static std::array<float, 2> thumbTouchPcts = { 0.0f, 0.0f };
+	static std::array<float, 2> triggerTouchPcts = { 0.0f, 0.0f };
+
+	constexpr float touchTransitionSpeed = 8.0f;
+
+	// Update interpolated values
+	thumbTouchPcts[hand] = glm::clamp(thumbTouchPcts[hand] + (thumbTouch ? deltaTime * touchTransitionSpeed : -deltaTime * touchTransitionSpeed), 0.0f, 1.0f);
+	triggerTouchPcts[hand] = glm::clamp(triggerTouchPcts[hand] + (triggerTouch ? deltaTime * touchTransitionSpeed : -deltaTime * touchTransitionSpeed), 0.0f, 1.0f);
+
+	output.thumbTouchPct = thumbTouchPcts[hand];
+	output.triggerTouchPct = triggerTouchPcts[hand];
+
+	// --- NMS SKELETAL FORCE OVERRIDE ---
+	extern float g_NmsDigitalGripLeft;
+	extern float g_NmsDigitalGripRight;
+
+	float nmsHandForce = (hand == vr::TrackedControllerRole_RightHand || hand == 1) ? g_NmsDigitalGripRight : g_NmsDigitalGripLeft;
+
+	if (nmsHandForce > 0.5f) {
+		output.gripPct = 1.0f;
+		output.triggerPct = 1.0f;
+	}
+	// -----------------------------------
+
+	return output;
+}
+
+/*
 static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceType hand, const LegacyControllerActions controller) {
 	struct ControllerState {
 		float triggerPct;
@@ -311,7 +420,7 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 	// Trigger State
 	XrResult actionRes = xrGetActionStateFloat(xr_session.get(), &info, &state);
 	output.triggerPct = 0.0f;
-	if (XR_SUCCEEDED(actionRes) && state.currentState >= simulateCurlThreshold) {
+	if (XR_SUCCEEDED(actionRes) && state.isActive && state.currentState >= simulateCurlThreshold) { // katla66 && state.isActive
 		output.triggerPct = state.currentState;
 	} else if (XR_FAILED(actionRes)) {
 		OOVR_LOGF("WARNING: couldn't get trigger percentage (%d)", actionRes);
@@ -321,7 +430,7 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 	info.action = controller.grip;
 	actionRes = xrGetActionStateFloat(xr_session.get(), &info, &state);
 	output.gripPct = 0.0f;
-	if (XR_SUCCEEDED(actionRes) && state.currentState >= simulateCurlThreshold) {
+	if (XR_SUCCEEDED(actionRes) && state.isActive && state.currentState >= simulateCurlThreshold) { // katla66 && state.isActive
 		output.gripPct = state.currentState;
 	} else if (XR_FAILED(actionRes)) {
 		OOVR_LOGF("WARNING: couldn't get grip percentage (%d)", actionRes);
@@ -383,7 +492,7 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 	output.triggerTouchPct = triggerTouchPcts[hand];
 
 	return output;
-}
+} */
 
 // OpenXR Hand Joints to OpenVR Hand Skeleton logic generously donated by danwillm from valve.
 bool BaseInput::XrHandJointsToSkeleton(const std::vector<XrHandJointLocationEXT>& joints, bool isRight, VRBoneTransform_t* output, glm::mat4 transform)
@@ -423,6 +532,90 @@ void BaseInput::ParentSpaceSkeletonToModelSpace(VRBoneTransform_t* joints)
 	convertJointRange(eBone_PinkyFinger0, eBone_PinkyFinger4, joints);
 }
 
+
+EVRInputError BaseInput::getEstimatedBoneData( //katla66
+    ITrackedDevice::TrackedDeviceType hand,
+    EVRSkeletalTransformSpace transformSpace,
+    EVRSkeletalMotionRange eMotionRange,
+    std::span<VRBoneTransform_t, eBone_Count> boneData)
+{
+	auto& controller = legacyControllers[hand];
+
+	auto state = GetInterpolatedControllerState(hand, controller);
+
+	auto boneDataGen = [state](const BoneArray& openPose, const BoneArray& closedPose) {
+		return std::ranges::iota_view(0, static_cast<int>(eBone_Count)) | std::views::transform([=](int bone_index) {
+			auto bone = openPose[bone_index];
+
+			// Put the thumb down on touch
+			if (state.thumbTouchPct != 0.0f) {
+				if ((bone_index >= eBone_Thumb0 && bone_index <= eBone_Thumb3) || bone_index == eBone_Aux_Thumb)
+					InterpolateBone(bone, closedPose[bone_index], state.thumbTouchPct);
+			}
+
+			// Curl fingers on trigger touch
+			if (state.triggerTouchPct != 0.0f || state.triggerPct != 0.0f) {
+				// SteamVR does something similar, curling adjacent fingers to make them look more natural
+				if ((bone_index >= eBone_IndexFinger0 && bone_index <= eBone_IndexFinger4) || bone_index == eBone_Aux_IndexFinger)
+					InterpolateBone(bone, closedPose[bone_index], 0.4f * state.triggerTouchPct);
+				else if ((bone_index >= eBone_MiddleFinger0 && bone_index <= eBone_MiddleFinger4) || bone_index == eBone_Aux_MiddleFinger)
+					InterpolateBone(bone, closedPose[bone_index], 0.2f * state.triggerTouchPct);
+				else if ((bone_index >= eBone_RingFinger0 && bone_index <= eBone_RingFinger4) || bone_index == eBone_Aux_RingFinger)
+					InterpolateBone(bone, closedPose[bone_index], 0.1f * state.triggerTouchPct);
+			}
+
+			// Bend the index finger on trigger
+			if (state.triggerPct != 0.0f) {
+				if ((bone_index >= eBone_IndexFinger0 && bone_index <= eBone_IndexFinger4) || bone_index == eBone_Aux_IndexFinger)
+					InterpolateBone(bone, closedPose[bone_index], state.triggerPct);
+			}
+
+			// Bend the 3 remaining fingers on grip
+			if (state.gripPct != 0.0f) {
+				if ((bone_index >= eBone_MiddleFinger0 && bone_index <= eBone_PinkyFinger4) || (bone_index >= eBone_Aux_MiddleFinger && bone_index <= eBone_Aux_PinkyFinger))
+					InterpolateBone(bone, closedPose[bone_index], state.gripPct);
+			}
+
+			return bone;
+		});
+	};
+
+	// Find the interaction profile to retrieve hand poses
+	std::shared_ptr<ITrackedDevice> dev = BackendManager::Instance().GetDeviceByHand(hand);
+	if (!dev)
+		return vr::VRInputError_InvalidDevice;
+
+	const InteractionProfile* profile = dev->GetInteractionProfile();
+	if (!profile)
+		return vr::VRInputError_InvalidDevice;
+
+	const std::optional<BoneArray> open = profile->GetSkeletalReferencePose(hand, VRSkeletalReferencePose_OpenHand);
+	if (!open.has_value()) {
+		OOVR_LOGF("WARNING: Couldn't find reference pose: %d, %d", hand, VRSkeletalReferencePose_OpenHand);
+		return vr::VRInputError_InvalidSkeleton;
+	}
+
+	// GripLimit is the pose that takes the controller into account
+	const EVRSkeletalReferencePose closedPose = eMotionRange == VRSkeletalMotionRange_WithController
+	    ? VRSkeletalReferencePose_GripLimit
+	    : VRSkeletalReferencePose_Fist;
+
+	const std::optional<BoneArray> closed = profile->GetSkeletalReferencePose(hand, closedPose);
+	if (!closed.has_value()) {
+		OOVR_LOGF("WARNING: Couldn't find reference pose: %d, %d", hand, closedPose);
+		return vr::VRInputError_InvalidSkeleton;
+	}
+
+	std::ranges::copy(boneDataGen(open.value(), closed.value()), boneData.begin());
+
+	if (transformSpace == EVRSkeletalTransformSpace::VRSkeletalTransformSpace_Model)
+		ParentSpaceSkeletonToModelSpace(boneData.data());
+
+	return vr::VRInputError_None;
+}
+
+
+/*
 EVRInputError BaseInput::getEstimatedBoneData(
     ITrackedDevice::TrackedDeviceType hand,
     EVRSkeletalTransformSpace transformSpace,
@@ -432,6 +625,15 @@ EVRInputError BaseInput::getEstimatedBoneData(
 	auto& controller = legacyControllers[hand];
 
 	auto state = GetInterpolatedControllerState(hand, controller);
+
+	// --- NMS SKELETAL OVERRIDE FIX --- katla66
+	extern float g_NmsGripOverrideLeft;
+	extern float g_NmsGripOverrideRight;
+	float nmsOverride = (hand == vr::TrackedControllerRole_RightHand || hand == 1 /* HAND_RIGHT ) ? g_NmsGripOverrideRight : g_NmsGripOverrideLeft;
+	if (nmsOverride > state.gripPct) {
+		state.gripPct = nmsOverride;
+	}
+	// ---------------------------------
 
 	auto boneDataGen = [state](const BoneArray& openPose, const BoneArray& closedPose) {
 		return std::ranges::iota_view(0, static_cast<int>(eBone_Count)) | std::views::transform([=](int bone_index) {
@@ -502,6 +704,7 @@ EVRInputError BaseInput::getEstimatedBoneData(
 
 	return vr::VRInputError_None;
 }
+*/
 
 EVRInputError BaseInput::getEstimatedSkeletalSummary(ITrackedDevice::TrackedDeviceType hand, VRSkeletalSummaryData_t* pSkeletalSummaryData)
 {

@@ -1,6 +1,7 @@
 #pragma once
 #include "../BaseCommon.h" // TODO don't import from OCOVR, and remove the "../"
 #include "custom_types.h"
+#include "../../build/generated/interfaces/vrtypes.h"
 #include "generated/interfaces/IVRSystem_017.h"
 #include "openxr/openxr.h"
 #include <memory>
@@ -378,6 +379,13 @@ public:
 	 * number for logging or showing to a user, and not to try to detect anything at runtime. When appropriate, feature-specific
 	 * presence information is provided by other APIs. */
 	const char* GetRuntimeVersion();
+
+	
+	// Newly defined in System 026, not implemented yet
+	virtual bool ComputeDistortionSet(vr::EVREye eEye, vr::EVRDistortionChannel eChannel, bool bAsNormalizedDeviceCoordinates, uint32_t nNumCoordinates, const vr::DistortionCoordinate_t* pInput, vr::DistortionCoordinate_t* pOutput) ;
+	virtual bool GetEyeTrackedFoveationCenter(vr::HmdVector2_t* pFoveationCenter, vr::HmdVector2_t* pUnknown);
+	virtual bool GetEyeTrackedFoveationCenterForProjection(const vr::HmdMatrix44_t* pUnknownMatrix, vr::HmdVector2_t* pFoveationCenter);
+	virtual vr::EVRInitError SetSDKVersion(uint32_t nMajor, uint32_t nMinor, uint32_t nPatch);
 
 public:
 	// Legacy methods

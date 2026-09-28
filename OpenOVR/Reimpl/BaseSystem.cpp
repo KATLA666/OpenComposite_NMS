@@ -222,6 +222,7 @@ bool BaseSystem::SetDisplayVisibility(bool bIsVisibleOnDesktop)
 void BaseSystem::GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin toOrigin, float predictedSecondsToPhotonsFromNow,
     TrackedDevicePose_t* poseArray, uint32_t poseArrayCount)
 {
+	//NMS does not call this function katla66
 
 	BackendManager::Instance().GetDeviceToAbsoluteTrackingPose(toOrigin, predictedSecondsToPhotonsFromNow, poseArray, poseArrayCount);
 }
@@ -886,4 +887,24 @@ void BaseSystem::ResetSeatedZeroPose()
 			xrDestroySpace(oldSpace);
 		}
 	}
+}
+
+
+//new in 026, not implemented yet
+bool BaseSystem::ComputeDistortionSet(vr::EVREye eEye, vr::EVRDistortionChannel eChannel, bool bAsNormalizedDeviceCoordinates, uint32_t nNumCoordinates, const vr::DistortionCoordinate_t* pInput, vr::DistortionCoordinate_t* pOutput)
+{
+	return false;
+}
+bool BaseSystem::GetEyeTrackedFoveationCenter(vr::HmdVector2_t* pFoveationCenter, vr::HmdVector2_t* pUnknown)
+{
+	return false;
+}
+bool BaseSystem::GetEyeTrackedFoveationCenterForProjection(const vr::HmdMatrix44_t* pUnknownMatrix, vr::HmdVector2_t* pFoveationCenter)
+{
+	return false;
+}
+vr::EVRInitError BaseSystem::SetSDKVersion(uint32_t nMajor, uint32_t nMinor, uint32_t nPatch)
+{
+	return vr::EVRInitError::VRInitError_None;
+	// stub
 }

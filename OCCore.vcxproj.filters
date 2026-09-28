@@ -1,0 +1,405 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="G:\OpenComposite\CMakeFiles\OCCore.dir\cmake_pch.cxx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\compositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\dx11compositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\dx10compositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\dx12compositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\glcompositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\glescompositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Compositor\vkcompositor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\convert.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\logging.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\linux_funcs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\backtrace.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Config.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\debug_helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\xrutil.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\xrmoreutils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\KeyboardLayout.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\SudoFontMeta.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\VRKeyboard.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\InteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\OculusInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\KhrSimpleInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\ViveInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\IndexControllerInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\HolographicInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\ReverbG2InteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\Input\ViveTrackerInteractionProfile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\OpenOVR.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseApplications.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseChaperone.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseChaperoneSetup.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseClientCore.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseCompositor.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseExtendedDisplay.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseInput.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseInput_Hand.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseInputInternal.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseOverlay.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseOverlayView.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseRenderModels.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseScreenshots.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseSettings.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseSystem.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseMailbox.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseControlPanel.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\BaseHeadsetView.cpp">
+      <Filter>Interfaces</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRApplications.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRChaperone.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRChaperoneSetup.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRClientCore.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRCompositor.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRExtendedDisplay.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRInput.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRInputInternal.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVROverlay.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVROverlayView.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRRenderModels.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRScreenshots.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRSettings.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRSystem.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRMailbox.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRControlPanel.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Reimpl\CVRHeadsetView.cpp">
+      <Filter>Interfaces\Declarations</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\generated\stubs.gen.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\ini.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Misc\lodepng.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\OpenOVR\Drivers\Backend.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="G:\OpenComposite\generated\version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\BaseCommon.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Compositor\compositor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\convert.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\custom_types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\logging.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\debug_helper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\ini.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\KeyboardLayout.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\SudoFontMeta.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Keyboard\VRKeyboard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Input\InteractionProfile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Input\OculusInteractionProfile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\Input\KhrSimpleInteractionProfile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\lodepng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Misc\ScopeGuard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseApplications.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseChaperone.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseChaperoneSetup.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseClientCore.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseCompositor.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseExtendedDisplay.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseInput.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseOverlay.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseOverlayView.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseRenderModels.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseScreenshots.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseSettings.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseSystem.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseMailbox.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseControlPanel.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\BaseHeadsetView.h">
+      <Filter>Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Reimpl\Interfaces.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\generated\static_bases.gen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\resources.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\steamvr_abi.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenOVR\Drivers\Backend.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRClientCore_002.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRClientCore_003.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRCompositor_017.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRMailbox_001.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRInputInternal_002.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\OpenVRHeaders\custom_interfaces\IVRControlPanel_006.h">
+      <Filter>OpenVR\Custom</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\RuntimeExtensions\openxr_extension_helpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\RuntimeExtensions\XR_MNDX_xdev_space.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\generated\interfaces\vrtypes.h">
+      <Filter>OpenVR</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\CMakeFiles\OCCore.dir\Debug\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\CMakeFiles\OCCore.dir\Release\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\CMakeFiles\OCCore.dir\MinSizeRel\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\CMakeFiles\OCCore.dir\RelWithDebInfo\cmake_pch.hxx">
+      <Filter>Precompile Header File</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="G:\OpenComposite\CMakeFiles\08d0308ecaffb24fca4344c80cb9b3fa\vrtypes.h.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="G:\OpenComposite\CMakeFiles\f974140ed959f9339323198ea8dd5912\stubs.gen.cpp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="G:\OpenComposite\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{7D2EF0D9-08DE-3168-AD08-F07C1384A6DB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{CD6439A3-9AD7-3923-9749-D2D299239C53}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interfaces">
+      <UniqueIdentifier>{20E006AE-C32E-3EC4-8AFE-376A39F545C2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interfaces\Declarations">
+      <UniqueIdentifier>{04E011F1-37CB-3F33-BBE0-A2555F79FF9E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OpenVR">
+      <UniqueIdentifier>{2EF82B42-8650-3EDD-83E2-41B0C8F9B66D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OpenVR\Custom">
+      <UniqueIdentifier>{6A20D1B7-43C8-382D-8BE5-DF11C031BF40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Precompile Header File">
+      <UniqueIdentifier>{E15C9A5A-6059-310A-B7AE-CCD07701DEA3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{08F1C00A-3314-3541-A3CA-C7A06D9685F3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -207,6 +207,16 @@ public:
 
 	XrHandTrackerEXT handTrackers[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };
 
+	// ---------------  EyeTracking ....Not implemented yet.... --------------- //
+
+	/** Reads the state of an eye tracking action given its handle for the number of seconds relative to now.
+	 * This will generally be called with negative times from the fUpdateTime fields in other actions. */
+	virtual EVRInputError GetEyeTrackingDataRelativeToNow(VRActionHandle_t action, vr::ETrackingUniverseOrigin eOrigin, float fPredictedSecondsFromNow, vr::VREyeTrackingData_t* pEyeTrackingData, uint32_t ulEyeTrackingDataSize);
+
+	/** Reads the state of an eye tracking action given its handle. The returned data will be for the frame
+	 * predicted by last call to IVRCompositor::WaitGetPoses(). */
+	virtual EVRInputError GetEyeTrackingDataForNextFrame(VRActionHandle_t action, vr::ETrackingUniverseOrigin eOrigin, vr::VREyeTrackingData_t* pEyeTrackingData, uint32_t ulEyeTrackingDataSize);
+
 	// ---------------  Handle management   --------------- //
 
 	/** Sets the path to the action manifest JSON file that is used by this application. If this information

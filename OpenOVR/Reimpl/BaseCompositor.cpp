@@ -49,6 +49,8 @@ BaseCompositor::~BaseCompositor()
 
 void BaseCompositor::SetTrackingSpace(ETrackingUniverseOrigin eOrigin)
 {
+	//NMS does not call this funktion katla66
+
 	XrReferenceSpaceType origin = XR_REFERENCE_SPACE_TYPE_STAGE;
 	if (eOrigin == TrackingUniverseSeated) {
 		origin = XR_REFERENCE_SPACE_TYPE_LOCAL;

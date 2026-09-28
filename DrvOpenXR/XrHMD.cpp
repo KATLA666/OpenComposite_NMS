@@ -11,6 +11,7 @@
 #include "generated/static_bases.gen.h"
 #include <thread>
 #include <mutex>
+#include <chrono>
 
 void XrHMD::GetRecommendedRenderTargetSize(uint32_t* width, uint32_t* height)
 {

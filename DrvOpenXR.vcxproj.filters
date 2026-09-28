@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\DrvOpenXR.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\XrBackend.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\XrTrackedDevice.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\XrHMD.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\XrController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\XrGenericTracker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryGraphics.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryD3D11.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryVk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrDriverPrivate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrBackend.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrTrackedDevice.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrHMD.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\XrGenericTracker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryGraphics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryD3D11.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\DrvOpenXR\tmp_gfx\TemporaryVk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\generated\interfaces\vrtypes.h">
+      <Filter>OpenVR</Filter>
+    </ClInclude>
+    <ClInclude Include="G:\OpenComposite\generated\static_bases.gen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="G:\OpenComposite\CMakeFiles\08d0308ecaffb24fca4344c80cb9b3fa\vrtypes.h.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="G:\OpenComposite\CMakeFiles\f974140ed959f9339323198ea8dd5912\stubs.gen.cpp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="G:\OpenComposite\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{7D2EF0D9-08DE-3168-AD08-F07C1384A6DB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{CD6439A3-9AD7-3923-9749-D2D299239C53}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OpenVR">
+      <UniqueIdentifier>{2EF82B42-8650-3EDD-83E2-41B0C8F9B66D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{08F1C00A-3314-3541-A3CA-C7A06D9685F3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

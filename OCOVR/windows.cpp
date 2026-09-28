@@ -19,7 +19,8 @@
 #include "Drivers/DriverManager.h"
 #include "DrvOpenXR.h"
 
-HMODULE openovr_module_id;
+
+    HMODULE openovr_module_id;
 HMODULE chainedImplementation;
 
 BOOL APIENTRY DllMain(HMODULE hModule,
@@ -31,6 +32,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		openovr_module_id = hModule;
 #if defined(_DEBUG)
 		DbgSetModule(hModule);
+		break;
 #endif
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
