@@ -20,6 +20,8 @@
 #include <string>
 #include <thread>
 
+#include "BackendPerf.h"
+
 static XrBackend* currentBackend;
 static bool initialised = false;
 
@@ -262,18 +264,22 @@ IBackend* DrvOpenXR::CreateOpenXRBackend(const char* startupInfo)
 	}
 
 #ifdef _DEBUG
-	XrDebugUtilsMessengerCreateInfoEXT dbgCreateInfo{};
-	dbgCreateInfo.type = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	dbgCreateInfo.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	dbgCreateInfo.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
-	dbgCreateInfo.next = NULL;
-	dbgCreateInfo.userData = NULL;
-	if (dbgMessenger != NULL) {
-		OOVR_FAILED_XR_ABORT(xrDestroyDebugUtilsMessengerEXT(dbgMessenger));
-		dbgMessenger = NULL;
+	if (availableExtensions.count(XR_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+		XrDebugUtilsMessengerCreateInfoEXT dbgCreateInfo{};
+		dbgCreateInfo.type = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		dbgCreateInfo.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		if (BackendPerf::EnvironmentFlag("OPENCOMPOSITE_XR_DEBUG_VERBOSE"))
+			dbgCreateInfo.messageSeverities |= XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+		dbgCreateInfo.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
+		dbgCreateInfo.next = NULL;
+		dbgCreateInfo.userData = NULL;
+		if (dbgMessenger != NULL) {
+			OOVR_FAILED_XR_ABORT(xrDestroyDebugUtilsMessengerEXT(dbgMessenger));
+			dbgMessenger = NULL;
+		}
+		dbgCreateInfo.userCallback = debugCallback;
+		OOVR_FAILED_XR_ABORT(xrCreateDebugUtilsMessengerEXT(xr_instance, &dbgCreateInfo, &dbgMessenger));
 	}
-	dbgCreateInfo.userCallback = debugCallback;
-	OOVR_FAILED_XR_ABORT(xrCreateDebugUtilsMessengerEXT(xr_instance, &dbgCreateInfo, &dbgMessenger));
 #endif
 
 	// Load the function pointers for the extension functions

@@ -108,6 +108,9 @@ private:
 	// Have we started rendering a frame yet? If not, calling xrEndFrame would result in an error
 	bool renderingFrame = false;
 
+	// OpenXR may require an empty frame while the session is running.
+	bool shouldRenderFrame = false;
+
 	// Were we supposed to start rendering a frame, but couldn't since we were on the
 	// early (pre switch to application graphics instance) OpenXR session?
 	bool deferredRenderingStart = false;

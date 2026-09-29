@@ -5,6 +5,7 @@
 #include "dx12compositor.h"
 
 #include <string>
+#include <cstdint>
 
 #include <atlbase.h>
 
@@ -26,9 +27,16 @@ using glm::min;
 namespace {
 void WaitForFence(ID3D12Fence* fence, UINT64 completionValue, HANDLE waitEvent)
 {
-	if (fence->GetCompletedValue() < completionValue) {
-		fence->SetEventOnCompletion(completionValue, waitEvent);
-		WaitForSingleObject(waitEvent, INFINITE);
+	const UINT64 completedValue = fence->GetCompletedValue();
+	if (completedValue == UINT64_MAX)
+		OOVR_ABORT("D3D12 device removed while waiting for a copy fence");
+	if (completedValue < completionValue) {
+		OOVR_FAILED_DX_ABORT(fence->SetEventOnCompletion(completionValue, waitEvent));
+		const DWORD waitResult = WaitForSingleObject(waitEvent, INFINITE);
+		OOVR_FALSE_ABORT(waitResult == WAIT_OBJECT_0);
+		// Device removal can also signal the event.
+		const UINT64 valueAfterWait = fence->GetCompletedValue();
+		OOVR_FALSE_ABORT(valueAfterWait != UINT64_MAX && valueAfterWait >= completionValue);
 	}
 }
 } // namespace
@@ -36,16 +44,27 @@ void WaitForFence(ID3D12Fence* fence, UINT64 completionValue, HANDLE waitEvent)
 DX12Compositor::DX12Compositor(D3D12TextureData_t* td)
 {
 	queue = td->m_pCommandQueue;
-	queue->GetDevice(IID_PPV_ARGS(&device));
+	OOVR_FAILED_DX_ABORT(queue->GetDevice(IID_PPV_ARGS(&device)));
 }
 
 DX12Compositor::~DX12Compositor()
 {
-	for (auto event : frameFenceEvents) {
-		CloseHandle(event);
-	}
+	ReleaseCopyResources();
+	// ComPtr releases device and queue automatically.
+}
 
-	device->Release();
+void DX12Compositor::ReleaseCopyResources()
+{
+	for (size_t i = 0; i < frameFences.size(); ++i)
+		WaitForFence(frameFences[i].Get(), fenceValues[i], frameFenceEvents[i]);
+
+	commandLists.clear();
+	commandAllocators.clear();
+	for (auto event : frameFenceEvents)
+		CloseHandle(event);
+	frameFenceEvents.clear();
+	frameFences.clear();
+	fenceValues.clear();
 }
 
 void DX12Compositor::CheckCreateSwapChain(const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds, bool cube)
@@ -83,6 +102,8 @@ void DX12Compositor::CheckCreateSwapChain(const vr::Texture_t* texture, const vr
 		OOVR_LOGF("Texture desc flags:  %d", srcDesc.Flags);
 		OOVR_LOGF("Texture desc width:  %d", srcDesc.Width);
 		OOVR_LOGF("Texture desc height: %d", srcDesc.Height);
+
+		ReleaseCopyResources();
 
 		// First, delete the old chain if necessary
 		if (chain) {
@@ -146,10 +167,6 @@ void DX12Compositor::CheckCreateSwapChain(const vr::Texture_t* texture, const vr
 
 		OOVR_FALSE_ABORT(imageCount == imagesHandles.size());
 
-		for (auto event : frameFenceEvents) {
-			CloseHandle(event);
-		}
-
 		commandLists.resize(imageCount);
 		commandAllocators.resize(imageCount);
 		frameFenceEvents.resize(imageCount);
@@ -158,16 +175,17 @@ void DX12Compositor::CheckCreateSwapChain(const vr::Texture_t* texture, const vr
 
 		for (uint32_t i = 0; i < imageCount; i++) {
 			frameFenceEvents[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+			OOVR_FALSE_ABORT(frameFenceEvents[i] != nullptr);
 			fenceValues[i] = 0;
-			device->CreateFence(0, D3D12_FENCE_FLAG_NONE,
-			    IID_PPV_ARGS(&frameFences[i]));
+			OOVR_FAILED_DX_ABORT(device->CreateFence(0, D3D12_FENCE_FLAG_NONE,
+			    IID_PPV_ARGS(&frameFences[i])));
 
-			device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-			    IID_PPV_ARGS(&commandAllocators[i]));
-			device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+			OOVR_FAILED_DX_ABORT(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+			    IID_PPV_ARGS(&commandAllocators[i])));
+			OOVR_FAILED_DX_ABORT(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
 			    commandAllocators[i].Get(), nullptr,
-			    IID_PPV_ARGS(&commandLists[i]));
-			commandLists[i]->Close();
+			    IID_PPV_ARGS(&commandLists[i])));
+			OOVR_FAILED_DX_ABORT(commandLists[i]->Close());
 		}
 		// TODO do we need to release the images at some point, or does the swapchain do that for us?
 	}
@@ -182,6 +200,7 @@ void DX12Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 	D3D12_RESOURCE_DESC srcDesc;
 	srcDesc = input->m_pResource->GetDesc();
 	if (srcDesc.Format == DXGI_FORMAT_BC1_TYPELESS) {
+		ReleaseCopyResources();
 		if (chain) {
 			OOVR_FAILED_XR_ABORT(xrDestroySwapchain(chain));
 			chain = XR_NULL_HANDLE;
@@ -199,21 +218,14 @@ void DX12Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 	WaitForFence(frameFences[currentIndex].Get(),
 	    fenceValues[currentIndex], frameFenceEvents[currentIndex]);
 
-	commandAllocators[currentIndex]->Reset();
+	OOVR_FAILED_DX_ABORT(commandAllocators[currentIndex]->Reset());
 	auto commandList = commandLists[currentIndex].Get();
-	commandList->Reset(commandAllocators[currentIndex].Get(), nullptr);
+	OOVR_FAILED_DX_ABORT(commandList->Reset(commandAllocators[currentIndex].Get(), nullptr));
 
 	// Wait until the swapchain is ready - this makes sure the compositor isn't writing to it
 	// We don't have to pass in currentIndex since it uses the oldest acquired-but-not-waited-on
 	// image, so we should be careful with concurrency here.
-	// XR_TIMEOUT_EXPIRED is considered successful but swapchain still can't be used so need to handle that
-	XrSwapchainImageWaitInfo waitInfo{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-	waitInfo.timeout = 500000000; // time out in nano seconds - 500ms
-	XrResult res;
-	OOVR_FAILED_XR_ABORT(res = xrWaitSwapchainImage(chain, &waitInfo));
-
-	if (res == XR_TIMEOUT_EXPIRED)
-		OOVR_ABORTF("xrWaitSwapchainImage timeout");
+	WaitForSwapchainImage();
 
 	// Copy the source to the destination image
 	D3D12_BOX sourceRegion;
@@ -231,18 +243,19 @@ void DX12Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 
 	commandList->CopyResource(imagesHandles[currentIndex].texture, input->m_pResource);
 
-	commandList->Close();
+	OOVR_FAILED_DX_ABORT(commandList->Close());
 	ID3D12CommandList* set[] = { commandList };
 	queue->ExecuteCommandLists(1, set);
+
+	// Signal our copy before handing the image back to the runtime.
+	const auto fenceValue = currentFenceValue;
+	OOVR_FAILED_DX_ABORT(queue->Signal(frameFences[currentIndex].Get(), fenceValue));
+	fenceValues[currentIndex] = fenceValue;
+	++currentFenceValue;
 
 	// Release the swapchain - OpenXR will use the last-released image in a swapchain
 	XrSwapchainImageReleaseInfo releaseInfo{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
 	OOVR_FAILED_XR_ABORT(xrReleaseSwapchainImage(chain, &releaseInfo));
-
-	const auto fenceValue = currentFenceValue;
-	queue->Signal(frameFences[currentIndex].Get(), fenceValue);
-	fenceValues[currentIndex] = fenceValue;
-	++currentFenceValue;
 }
 
 void DX12Compositor::InvokeCubemap(const vr::Texture_t* textures)

@@ -44,6 +44,9 @@ public:
 protected:
 	virtual void CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds, std::optional<XruEye> eye, vr::EVRSubmitFlags submitFlags) = 0;
 
+	// An acquired image must be successfully waited on before any writes or release.
+	void WaitForSwapchainImage();
+
 	XrSwapchain chain = XR_NULL_HANDLE;
 
 	// The request used to create the current swapchain. This can be used to check if the swapchain needs recreating.
@@ -51,5 +54,5 @@ protected:
 
 	// The format specified by the game when creating the swapchain. This is used for verifying the format hasn't changed, since
 	// we do fiddle with it a bit to get the SRGB stuff done correctly.
-	int64_t createInfoFormat;
+	int64_t createInfoFormat = 0;
 };

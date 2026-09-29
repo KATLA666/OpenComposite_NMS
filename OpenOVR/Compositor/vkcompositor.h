@@ -13,6 +13,8 @@ public:
 	void InvokeCubemap(const vr::Texture_t* textures) override;
 
 private:
+	void ReleaseCopyResources();
+
 	static bool CheckChainCompatible(const vr::VRVulkanTextureData_t& tex, const XrSwapchainCreateInfo& chainDesc, vr::EColorSpace colourSpace);
 
 	// These resources live in the runtime's VkDevice
@@ -23,4 +25,6 @@ private:
 	VkQueue appQueue = VK_NULL_HANDLE;
 	VkCommandPool appCommandPool = VK_NULL_HANDLE;
 	std::vector<VkCommandBuffer> appCommandBuffers{};
+	// One fence per swapchain image; no per-frame allocation or queue-wide idle.
+	std::vector<VkFence> appCopyFences;
 };

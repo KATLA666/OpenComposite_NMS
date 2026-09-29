@@ -6,6 +6,7 @@
 #include "stdafx.h"
 
 #include <vulkan/vulkan.h>
+#include <cstdint>
 // Required for the close(2) call for the texture shared memory on Linux
 #ifndef _WIN32
 #include <unistd.h>
@@ -91,13 +92,31 @@ VkCompositor::VkCompositor(const vr::Texture_t* initialTexture)
 
 	VkCommandPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.queueFamilyIndex = tex->m_nQueueFamilyIndex;
 	OOVR_FAILED_VK_ABORT(vkCreateCommandPool(tex->m_pDevice, &poolInfo, nullptr, &appCommandPool));
 }
 
 VkCompositor::~VkCompositor()
 {
-	// destroying command pool also frees command buffers
+	ReleaseCopyResources();
 	vkDestroyCommandPool(appDevice, appCommandPool, nullptr);
+}
+
+void VkCompositor::ReleaseCopyResources()
+{
+	// Swapchain recreation and shutdown must not free pending command buffers.
+	if (!appCopyFences.empty()) {
+		const VkResult result = vkWaitForFences(appDevice, static_cast<uint32_t>(appCopyFences.size()), appCopyFences.data(), VK_TRUE, UINT64_MAX);
+		OOVR_FAILED_VK_ABORT(result);
+		OOVR_FALSE_ABORT(result == VK_SUCCESS);
+	}
+	if (!appCommandBuffers.empty()) {
+		vkFreeCommandBuffers(appDevice, appCommandPool, static_cast<uint32_t>(appCommandBuffers.size()), appCommandBuffers.data());
+		appCommandBuffers.clear();
+	}
+	for (VkFence fence : appCopyFences)
+		vkDestroyFence(appDevice, fence, nullptr);
+	appCopyFences.clear();
 }
 
 void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds, std::optional<XruEye>, vr::EVRSubmitFlags submitFlags)
@@ -112,25 +131,23 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 	// We could safeguard against any insane applications with a queue that we manage and copy to it,
 	// but it's simpler (and likely more performant) to just assume our app is sane.
 	OOVR_FALSE_ABORT(appQueue == tex->m_pQueue);
+	OOVR_FALSE_ABORT(appDevice == tex->m_pDevice);
 
 	bool usable = chain != XR_NULL_HANDLE && CheckChainCompatible(*tex, createInfo, texture->eColorSpace);
 
 	if (!usable) {
 		OOVR_LOG("Generating new swap chain");
 
-		// First, delete the old chain if necessary
-		if (chain)
-			xrDestroySwapchain(chain);
-
-		// Free old command buffers if necessary
-		if (!appCommandBuffers.empty()) {
-			vkFreeCommandBuffers(appDevice, appCommandPool, appCommandBuffers.size(), appCommandBuffers.data());
+		ReleaseCopyResources();
+		if (chain) {
+			OOVR_FAILED_XR_ABORT(xrDestroySwapchain(chain));
+			chain = XR_NULL_HANDLE;
 		}
 
 		// Make eye render buffer
 		createInfo = { XR_TYPE_SWAPCHAIN_CREATE_INFO };
 		createInfo.createFlags = 0;
-		createInfo.usageFlags = XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
+		createInfo.usageFlags = XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 		createInfo.faceCount = 1;
 		createInfo.width = tex->m_nWidth;
 		createInfo.height = tex->m_nHeight;
@@ -168,6 +185,12 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 		bufInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		bufInfo.commandBufferCount = chainLength;
 		OOVR_FAILED_VK_ABORT(vkAllocateCommandBuffers(appDevice, &bufInfo, appCommandBuffers.data()));
+
+		appCopyFences.resize(chainLength);
+		VkFenceCreateInfo fenceInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		for (VkFence& fence : appCopyFences)
+			OOVR_FAILED_VK_ABORT(vkCreateFence(appDevice, &fenceInfo, nullptr, &fence));
 	}
 
 	// First find the relevant image to render to
@@ -178,8 +201,13 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 	// Wait until the swapchain is ready - this makes sure the compositor isn't writing to it
 	// We don't have to pass in currentIndex since it uses the oldest acquired-but-not-waited-on
 	// image, so we should be careful with concurrency here.
-	XrSwapchainImageWaitInfo waitInfo{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-	OOVR_FAILED_XR_ABORT(xrWaitSwapchainImage(chain, &waitInfo));
+	WaitForSwapchainImage();
+
+	// Waiting on the XR image and completing our command buffer are separate lifetimes.
+	const VkFence currentFence = appCopyFences.at(currentIndex);
+	const VkResult fenceResult = vkWaitForFences(appDevice, 1, &currentFence, VK_TRUE, UINT64_MAX);
+	OOVR_FAILED_VK_ABORT(fenceResult);
+	OOVR_FALSE_ABORT(fenceResult == VK_SUCCESS);
 
 	const VkCommandBuffer currentCommandBuffer = appCommandBuffers.at(currentIndex);
 	VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -191,6 +219,7 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 	VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -292,6 +321,8 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 	// transition swapchain image back to COLOR_ATTACHMENT_OPTIMAL for runtime
 	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	vkCmdPipelineBarrier(
 	    currentCommandBuffer, //
 	    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -307,7 +338,8 @@ void VkCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRTex
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &currentCommandBuffer;
 
-	OOVR_FAILED_VK_ABORT(vkQueueSubmit(tex->m_pQueue, 1, &submitInfo, VK_NULL_HANDLE));
+	OOVR_FAILED_VK_ABORT(vkResetFences(appDevice, 1, &currentFence));
+	OOVR_FAILED_VK_ABORT(vkQueueSubmit(tex->m_pQueue, 1, &submitInfo, currentFence));
 
 	// Release the swapchain - OpenXR will use the last-released image in a swapchain
 	XrSwapchainImageReleaseInfo releaseInfo{ XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };

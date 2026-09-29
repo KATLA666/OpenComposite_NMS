@@ -11,6 +11,20 @@ Compositor::~Compositor()
 	}
 }
 
+void Compositor::WaitForSwapchainImage()
+{
+	XrSwapchainImageWaitInfo waitInfo{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
+	waitInfo.timeout = XR_INFINITE_DURATION;
+
+	// XR_TIMEOUT_EXPIRED is a success code, but does not grant image access.
+	// Use a blocking wait rather than polling the runtime with timeout == 0.
+	XrResult result;
+	do {
+		result = xrWaitSwapchainImage(chain, &waitInfo);
+		OOVR_FAILED_XR_ABORT(result);
+	} while (result == XR_TIMEOUT_EXPIRED);
+}
+
 void Compositor::Invoke(const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds, XrSwapchainSubImage& subImage, std::optional<XruEye> eye, vr::EVRSubmitFlags submitFlags)
 {
 	bool invertInCompositor = oovr_global_configuration.InvertUsingShaders();

@@ -18,6 +18,8 @@ public:
 	ComPtr<ID3D12Device> GetDevice() { return device; }
 
 private:
+	void ReleaseCopyResources();
+
 	void CheckCreateSwapChain(const vr::Texture_t* texture, const vr::VRTextureBounds_t* bounds, bool cube);
 
 	void ThrowIfFailed(HRESULT test);
@@ -33,7 +35,7 @@ private:
 	std::vector<HANDLE> frameFenceEvents;
 	std::vector<ComPtr<ID3D12Fence>> frameFences;
 	std::vector<UINT64> fenceValues;
-	UINT64 currentFenceValue;
+	UINT64 currentFenceValue = 1;
 
 	std::vector<XrSwapchainImageD3D12KHR> imagesHandles;
 

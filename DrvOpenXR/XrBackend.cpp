@@ -46,6 +46,8 @@
 #include <cinttypes>
 #include <mutex>
 
+#include "BackendPerf.h"
+
 using namespace vr;
 
 std::mutex inputRestartMutex;
@@ -154,30 +156,25 @@ void XrBackend::GetDeviceToAbsoluteTrackingPose(
 	}
 }
 
-static void find_queue_family_and_queue_idx(VkDevice dev, VkPhysicalDevice pdev, VkQueue desired_queue, uint32_t& out_queueFamilyIndex, uint32_t& out_queueIndex)
+static uint32_t find_queue_index(VkDevice dev, VkPhysicalDevice pdev, VkQueue desiredQueue, uint32_t queueFamilyIndex)
 {
-	uint32_t queue_family_count;
-	vkGetPhysicalDeviceQueueFamilyProperties(pdev, &queue_family_count, NULL);
+	uint32_t familyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(pdev, &familyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> families(familyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(pdev, &familyCount, families.data());
+	OOVR_FALSE_ABORT(queueFamilyIndex < familyCount);
+	OOVR_FALSE_ABORT(desiredQueue != VK_NULL_HANDLE);
 
-	std::vector<VkQueueFamilyProperties> hi(queue_family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(pdev, &queue_family_count, hi.data());
-	OOVR_LOGF("number of queue families is %d", queue_family_count);
-
-	for (uint32_t i = 0; i < queue_family_count; i++) {
-		OOVR_LOGF("queue family %d has %d queues", i, hi[i].queueCount);
-		for (uint32_t j = 0; j < hi[i].queueCount; j++) {
-			VkQueue tmp;
-			vkGetDeviceQueue(dev, i, j, &tmp);
-			if (tmp == desired_queue) {
-				OOVR_LOGF("Got desired queue: %d %d", i, j);
-				out_queueFamilyIndex = i;
-				out_queueIndex = j;
-				return;
-			}
-		}
+	// OpenVR supplies the family but not the queue index. Created queues in that
+	// family start at zero, so we reach the valid supplied queue before probing
+	// any uncreated index. Do not query other, potentially uncreated families.
+	for (uint32_t index = 0; index < families[queueFamilyIndex].queueCount; ++index) {
+		VkQueue queue = VK_NULL_HANDLE;
+		vkGetDeviceQueue(dev, queueFamilyIndex, index, &queue);
+		if (queue == desiredQueue)
+			return index;
 	}
-	OOVR_ABORT("Couldn't find the queue family index/queue index of the queue that the OpenVR app gave us!"
-	           "This is really odd and really shouldn't ever happen");
+	OOVR_ABORT("Could not find the submitted Vulkan queue in its declared queue family");
 }
 
 /* Submitting Frames */
@@ -186,6 +183,7 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 	// Check we're using the session with the application's device
 	if (!usingApplicationGraphicsAPI) {
 		usingApplicationGraphicsAPI = true;
+		BackendPerf::SetGraphicsAPI(static_cast<int>(tex->eType));
 
 		OOVR_LOG("Recreating OpenXR session for application graphics API");
 
@@ -232,7 +230,7 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 
 			D3D12TextureData_t* d3dTexData = (D3D12TextureData_t*)tex->handle;
 			ComPtr<ID3D12Device> device;
-			d3dTexData->m_pResource->GetDevice(IID_PPV_ARGS(&device));
+			OOVR_FAILED_DX_ABORT(d3dTexData->m_pResource->GetDevice(IID_PPV_ARGS(&device)));
 
 			XrGraphicsBindingD3D12KHR d3dInfo{};
 			d3dInfo.type = XR_TYPE_GRAPHICS_BINDING_D3D12_KHR;
@@ -241,13 +239,8 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 			graphicsBinding = std::make_unique<BindingWrapper<XrGraphicsBindingD3D12KHR>>(d3dInfo);
 			DrvOpenXR::SetupSession();
 
-#ifdef _DEBUG
-			ComPtr<ID3D12Debug> debugController;
-			D3D12GetDebugInterface(IID_PPV_ARGS(&debugController));
-			debugController->EnableDebugLayer();
-#endif
-
-			device->Release();
+			// The application already created this device: enabling the D3D12 debug
+			// layer here would remove it. ComPtr owns the reference from GetDevice.
 #else
 
  #ifdef __linux__
@@ -264,7 +257,7 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 
 			VkPhysicalDevice xr_desire;
 			// Regardless of error checking, we have to call this or we get crazy validation errors.
-			xr_ext->xrGetVulkanGraphicsDeviceKHR(xr_instance, xr_system, vktex->m_pInstance, &xr_desire);
+			OOVR_FAILED_XR_ABORT(xr_ext->xrGetVulkanGraphicsDeviceKHR(xr_instance, xr_system, vktex->m_pInstance, &xr_desire));
 
 			if (xr_desire != vktex->m_pPhysicalDevice) {
 				OOVR_ABORTF("The VkPhysicalDevice that the OpenVR app (%p) used is different from the one that the OpenXR runtime used (%p)!\n"
@@ -279,13 +272,9 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 			binding.physicalDevice = vktex->m_pPhysicalDevice;
 			binding.device = vktex->m_pDevice;
 
-			find_queue_family_and_queue_idx( //
-			    binding.device, //
-			    binding.physicalDevice, //
-			    vktex->m_pQueue, //
-			    binding.queueFamilyIndex, //
-			    binding.queueIndex //
-			);
+			binding.queueFamilyIndex = vktex->m_nQueueFamilyIndex;
+			binding.queueIndex = find_queue_index(binding.device, binding.physicalDevice,
+			    vktex->m_pQueue, binding.queueFamilyIndex);
 
 			graphicsBinding = std::make_unique<BindingWrapper<XrGraphicsBindingVulkanKHR>>(binding);
 			DrvOpenXR::SetupSession();
@@ -391,6 +380,8 @@ void XrBackend::CheckOrInitCompositors(const vr::Texture_t* tex)
 
 void XrBackend::WaitForTrackingData()
 {
+	submittedEyeTextures = false;
+	shouldRenderFrame = false;
 	// Make sure the OpenXR session is active before doing anything else, and if not then skip
 	if (!sessionActive) {
 		renderingFrame = false;
@@ -402,20 +393,32 @@ void XrBackend::WaitForTrackingData()
 
 	{
 		auto lock = xr_session.lock_shared();
-		OOVR_FAILED_XR_ABORT(xrWaitFrame(xr_session.get(), &waitInfo, &state));
+		const XrResult waitResult = BackendPerf::Measure(BackendPerf::Stage::Wait, [&] {
+			return xrWaitFrame(xr_session.get(), &waitInfo, &state);
+		});
+		OOVR_FAILED_XR_ABORT(waitResult);
 		xr_gbl->nextPredictedFrameTime = state.predictedDisplayTime;
+		BackendPerf::SetDisplayPeriod(state.predictedDisplayPeriod);
 
-		// FIXME loop until this returns true?
-		// OOVR_FALSE_ABORT(state.shouldRender);
+		shouldRenderFrame = state.shouldRender == XR_TRUE;
+		if (!shouldRenderFrame)
+			BackendPerf::Count(BackendPerf::Counter::NoRender);
 
 		XrFrameBeginInfo beginInfo{ XR_TYPE_FRAME_BEGIN_INFO };
-		OOVR_FAILED_XR_ABORT(xrBeginFrame(xr_session.get(), &beginInfo));
+		const XrResult beginResult = BackendPerf::Measure(BackendPerf::Stage::Begin, [&] {
+			return xrBeginFrame(xr_session.get(), &beginInfo);
+		});
+		OOVR_FAILED_XR_ABORT(beginResult);
+		if (beginResult == XR_FRAME_DISCARDED)
+			BackendPerf::Count(BackendPerf::Counter::Discarded);
 	}
 
 	xr_gbl->ClearCachedViews();
 
 	XrSpace projectionSpace = xr_space_from_ref_space_type(GetUnsafeBaseSystem()->currentSpace);
-	const XruCachedViews& cachedViews = xr_gbl->GetCachedViews(projectionSpace);
+	const XruCachedViews& cachedViews = BackendPerf::Measure(BackendPerf::Stage::Views, [&]() -> const XruCachedViews& {
+		return xr_gbl->GetCachedViews(projectionSpace);
+	});
 	const XrViewState& viewState = cachedViews.viewState;
 	const std::array<XrView, XruEyeCount>& views = cachedViews.views;
 
@@ -455,21 +458,6 @@ void XrBackend::StoreEyeTexture(
 {
 	CheckOrInitCompositors(texture);
 
-	XrCompositionLayerProjectionView& layer = projectionViews[eye];
-	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-
-	std::unique_ptr<Compositor>& compPtr = compositors[eye];
-	OOVR_FALSE_ABORT(compPtr.get() != nullptr);
-	Compositor& comp = *compPtr;
-
-	// If the session is inactive, we may be unable to write to the surface
-	if (sessionActive && renderingFrame)
-		comp.Invoke(texture, bounds, layer.subImage, (XruEye)eye, submitFlags);
-
-	submittedEyeTextures = true;
-
-	// TODO store view somewhere and use it for submitting our frame
-
 	// If WaitGetPoses was called before the first texture was submitted, we're in a kinda weird state
 	// The application will expect it can submit it's frames (and we do too) however xrBeginFrame was
 	// never called for this session - it was called for the early session, then when the first texture
@@ -479,6 +467,20 @@ void XrBackend::StoreEyeTexture(
 	if (deferredRenderingStart && usingApplicationGraphicsAPI) {
 		deferredRenderingStart = false;
 		WaitForTrackingData();
+	}
+
+	XrCompositionLayerProjectionView& layer = projectionViews[eye];
+	layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
+
+	std::unique_ptr<Compositor>& compPtr = compositors[eye];
+	OOVR_FALSE_ABORT(compPtr.get() != nullptr);
+	Compositor& comp = *compPtr;
+
+	// Keep the frame loop running, but skip OC's GPU copies when no layer is wanted.
+	if (sessionActive && renderingFrame && shouldRenderFrame) {
+		BackendPerf::Scope copyTimer(BackendPerf::Stage::Copy);
+		comp.Invoke(texture, bounds, layer.subImage, (XruEye)eye, submitFlags);
+		submittedEyeTextures = true;
 	}
 }
 
@@ -517,7 +519,7 @@ void XrBackend::SubmitFrames(bool showSkybox, bool postPresent)
 	// Apps can use layers to provide GUIs and loading screens where a 3D environment is not being rendered.
 	// Only create the projection layer if we have a 3D environment to submit.
 	XrCompositionLayerProjection mainLayer{ XR_TYPE_COMPOSITION_LAYER_PROJECTION };
-	if (submittedEyeTextures) {
+	if (shouldRenderFrame && submittedEyeTextures) {
 		// We have eye textures so setup a projection layer
 		mainLayer.space = xr_space_from_ref_space_type(GetUnsafeBaseSystem()->currentSpace);
 		mainLayer.views = projectionViews;
@@ -535,7 +537,8 @@ void XrBackend::SubmitFrames(bool showSkybox, bool postPresent)
 
 	// If we have an overlay then add
 	BaseOverlay* overlay = GetUnsafeBaseOverlay();
-	if (overlay) {
+	if (shouldRenderFrame && overlay) {
+		BackendPerf::Scope layerTimer(BackendPerf::Stage::Layers);
 		layer_count = overlay->_BuildLayers(app_layer, headers);
 	} else if (app_layer) {
 		layer_count = 1;
@@ -547,10 +550,16 @@ void XrBackend::SubmitFrames(bool showSkybox, bool postPresent)
 	info.layers = headers;
 	info.layerCount = layer_count;
 
-	OOVR_FAILED_XR_SOFT_ABORT(xrEndFrame(xr_session.get(), &info));
+	const XrResult endResult = BackendPerf::Measure(BackendPerf::Stage::End, [&] {
+		return xrEndFrame(xr_session.get(), &info);
+	});
+	if (XR_FAILED(endResult))
+		BackendPerf::Count(BackendPerf::Counter::EndErrors);
+	OOVR_FAILED_XR_SOFT_ABORT(endResult);
 
 	BaseSystem* sys = GetUnsafeBaseSystem();
 	if (sys) {
+		BackendPerf::Scope postTimer(BackendPerf::Stage::Post);
 		sys->_OnPostFrame();
 	}
 
@@ -558,6 +567,7 @@ void XrBackend::SubmitFrames(bool showSkybox, bool postPresent)
 	frameSubmitTimeUs = (double)std::chrono::duration_cast<std::chrono::microseconds>(now).count() / 1000000.0;
 
 	nFrameIndex++;
+	BackendPerf::MaybeReport();
 }
 
 IBackend::openvr_enum_t XrBackend::SetSkyboxOverride(const vr::Texture_t* pTextures, uint32_t unTextureCount)
@@ -575,8 +585,12 @@ IBackend::openvr_enum_t XrBackend::SetSkyboxOverride(const vr::Texture_t* pTextu
 		XrFrameWaitInfo waitInfo{ XR_TYPE_FRAME_WAIT_INFO };
 		XrFrameState state{ XR_TYPE_FRAME_STATE };
 
-		OOVR_FAILED_XR_ABORT(xrWaitFrame(xr_session.get(), &waitInfo, &state));
+		const XrResult waitResult = BackendPerf::Measure(BackendPerf::Stage::Wait, [&] {
+			return xrWaitFrame(xr_session.get(), &waitInfo, &state);
+		});
+		OOVR_FAILED_XR_ABORT(waitResult);
 		xr_gbl->nextPredictedFrameTime = state.predictedDisplayTime;
+		BackendPerf::SetDisplayPeriod(state.predictedDisplayPeriod);
 
 		// This submits a frame when a skybox override is set. This is designed around rFactor2 where the skybox is used as
 		// a loading screen and is frequently updated, and most other games probably behave in a similar manner. It'd be
@@ -585,7 +599,27 @@ IBackend::openvr_enum_t XrBackend::SetSkyboxOverride(const vr::Texture_t* pTextu
 		// not yet implemented since it's not currently worth the hassle, but if someone in the future wants to do it:
 		// TODO submit skybox frames in their own thread.
 		XrFrameBeginInfo beginInfo{ XR_TYPE_FRAME_BEGIN_INFO };
-		OOVR_FAILED_XR_ABORT(xrBeginFrame(xr_session.get(), &beginInfo));
+		const XrResult beginResult = BackendPerf::Measure(BackendPerf::Stage::Begin, [&] {
+			return xrBeginFrame(xr_session.get(), &beginInfo);
+		});
+		OOVR_FAILED_XR_ABORT(beginResult);
+		if (beginResult == XR_FRAME_DISCARDED)
+			BackendPerf::Count(BackendPerf::Counter::Discarded);
+
+		if (state.shouldRender == XR_FALSE) {
+			BackendPerf::Count(BackendPerf::Counter::NoRender);
+			XrFrameEndInfo emptyInfo{ XR_TYPE_FRAME_END_INFO };
+			emptyInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+			emptyInfo.displayTime = state.predictedDisplayTime;
+			const XrResult result = BackendPerf::Measure(BackendPerf::Stage::End, [&] {
+				return xrEndFrame(xr_session.get(), &emptyInfo);
+			});
+			if (XR_FAILED(result))
+				BackendPerf::Count(BackendPerf::Counter::EndErrors);
+			OOVR_FAILED_XR_SOFT_ABORT(result);
+			BackendPerf::MaybeReport();
+			return 0;
+		}
 
 		if (skybox_compositor == nullptr)
 			skybox_compositor = BaseCompositor::CreateCompositorAPI(pTextures);
@@ -597,7 +631,9 @@ IBackend::openvr_enum_t XrBackend::SetSkyboxOverride(const vr::Texture_t* pTextu
 		bounds.vMax = 0.0;
 
 		XrCompositionLayerQuad layerQuad = { XR_TYPE_COMPOSITION_LAYER_QUAD };
-		skybox_compositor->Invoke(pTextures, &bounds, layerQuad.subImage);
+		BackendPerf::Measure(BackendPerf::Stage::Copy, [&] {
+			skybox_compositor->Invoke(pTextures, &bounds, layerQuad.subImage);
+		});
 		layerQuad.type = XR_TYPE_COMPOSITION_LAYER_QUAD;
 		layerQuad.next = NULL;
 		layerQuad.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
@@ -615,7 +651,13 @@ IBackend::openvr_enum_t XrBackend::SetSkyboxOverride(const vr::Texture_t* pTextu
 		info.layers = layers;
 		info.layerCount = 1;
 
-		OOVR_FAILED_XR_SOFT_ABORT(xrEndFrame(xr_session.get(), &info));
+		const XrResult endResult = BackendPerf::Measure(BackendPerf::Stage::End, [&] {
+			return xrEndFrame(xr_session.get(), &info);
+		});
+		if (XR_FAILED(endResult))
+			BackendPerf::Count(BackendPerf::Counter::EndErrors);
+		OOVR_FAILED_XR_SOFT_ABORT(endResult);
+		BackendPerf::MaybeReport();
 
 	} else {
 		OOVR_SOFT_ABORT("Unsupported texture count");
@@ -638,6 +680,7 @@ void XrBackend::ClearSkyboxOverride()
  */
 bool XrBackend::GetFrameTiming(OOVR_Compositor_FrameTiming* pTiming, uint32_t unFramesAgo)
 {
+	BackendPerf::Count(BackendPerf::Counter::TimingQueries);
 	// Zero everything except the size field
 	memset(reinterpret_cast<unsigned char*>(pTiming) + sizeof(pTiming->m_nSize), 0, pTiming->m_nSize - sizeof(pTiming->m_nSize));
 
@@ -745,6 +788,7 @@ bool XrBackend::IsInputAvailable()
 
 void XrBackend::PumpEvents()
 {
+	BackendPerf::Scope pumpTimer(BackendPerf::Stage::Pump);
 	// Poll for OpenXR events
 	// TODO filter by session?
 	while (true) {
@@ -806,6 +850,7 @@ void XrBackend::PumpEvents()
 				break;
 			}
 		} else if (ev.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED) {
+			BackendPerf::Count(BackendPerf::Counter::Profiles);
 			UpdateInteractionProfile();
 		}
 
@@ -837,6 +882,10 @@ void XrBackend::PumpEvents()
 
 void XrBackend::OnSessionCreated()
 {
+	BackendPerf::Count(BackendPerf::Counter::Sessions);
+	submittedEyeTextures = false;
+	shouldRenderFrame = false;
+	memset(projectionViews, 0, sizeof(projectionViews));
 	sessionState = XR_SESSION_STATE_UNKNOWN;
 	sessionActive = false;
 	renderingFrame = false;
@@ -863,11 +912,15 @@ void XrBackend::OnSessionCreated()
 
 void XrBackend::PrepareForSessionShutdown()
 {
+	renderingFrame = false;
+	shouldRenderFrame = false;
+	submittedEyeTextures = false;
 	for (std::unique_ptr<Compositor>& c : compositors) {
 		c.reset();
 	}
 	skybox_compositor.reset();
 	overlay_compositors.clear();
+	BackendPerf::SetOverlayCount(0);
 	if (infoSet != XR_NULL_HANDLE) {
 		OOVR_FAILED_XR_ABORT(xrDestroyActionSet(infoSet));
 		infoSet = XR_NULL_HANDLE;
@@ -897,6 +950,7 @@ void XrBackend::OnOverlayTexture(const vr::Texture_t* texture)
 void XrBackend::RegisterOverlayCompositor(std::shared_ptr<Compositor> compositor)
 {
 	overlay_compositors.push_back(compositor);
+	BackendPerf::SetOverlayCount(overlay_compositors.size());
 }
 
 void XrBackend::UnregisterOverlayCompositor(std::shared_ptr<Compositor> compositor)
@@ -904,6 +958,7 @@ void XrBackend::UnregisterOverlayCompositor(std::shared_ptr<Compositor> composit
 	std::erase_if(overlay_compositors, [c = std::move(compositor)](std::shared_ptr<Compositor>& comp) {
 		return c == comp;
 	});
+	BackendPerf::SetOverlayCount(overlay_compositors.size());
 }
 
 void XrBackend::UpdateInteractionProfile()

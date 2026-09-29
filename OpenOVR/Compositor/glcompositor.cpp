@@ -120,15 +120,7 @@ void GLBaseCompositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::V
 	// Wait until the swapchain is ready - this makes sure the compositor isn't writing to it
 	// We don't have to pass in currentIndex since it uses the oldest acquired-but-not-waited-on
 	// image, so we should be careful with concurrency here.
-	XrSwapchainImageWaitInfo waitInfo{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-
-	// If the compositor is being slow, keep trying until we get through. We're not allowed to just
-	// fail since the image has been acquired.
-	// TODO make this stuff common across compositors, so this logic applies to all of them.
-	XrResult res;
-	do {
-		OOVR_FAILED_XR_ABORT(res = xrWaitSwapchainImage(chain, &waitInfo));
-	} while (res == XR_TIMEOUT_EXPIRED);
+	WaitForSwapchainImage();
 
 	// Actually copy the image across
 	GLuint dst = images.at(currentIndex);

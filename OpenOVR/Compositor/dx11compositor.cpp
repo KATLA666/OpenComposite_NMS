@@ -110,6 +110,8 @@ DX11Compositor::DX11Compositor(ID3D11Texture2D* initial)
 	ID3DBlob* fs_pixel_shader_blob = d3d_compile_shader(fs_shader_code, "ps_fs", "ps_5_0");
 	OOVR_FAILED_DX_ABORT(device->CreateVertexShader(fs_vert_shader_blob->GetBufferPointer(), fs_vert_shader_blob->GetBufferSize(), nullptr, &fs_vshader));
 	OOVR_FAILED_DX_ABORT(device->CreatePixelShader(fs_pixel_shader_blob->GetBufferPointer(), fs_pixel_shader_blob->GetBufferSize(), nullptr, &fs_pshader));
+	fs_vert_shader_blob->Release();
+	fs_pixel_shader_blob->Release();
 
 	// Create a texture sampler state description.
 	D3D11_SAMPLER_DESC samplerDesc;
@@ -143,6 +145,9 @@ DX11Compositor::~DX11Compositor()
 
 	resolvedMSAATextures.clear();
 
+	quad_sampleState->Release();
+	fs_vshader->Release();
+	fs_pshader->Release();
 	context->Release();
 	device->Release();
 }
@@ -302,14 +307,7 @@ void DX11Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 	// Wait until the swapchain is ready - this makes sure the compositor isn't writing to it
 	// We don't have to pass in currentIndex since it uses the oldest acquired-but-not-waited-on
 	// image, so we should be careful with concurrency here.
-	// XR_TIMEOUT_EXPIRED is considered successful but swapchain still can't be used so need to handle that
-	XrSwapchainImageWaitInfo waitInfo{ XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-	waitInfo.timeout = 500000000; // time out in nano seconds - 500ms
-	XrResult res;
-	OOVR_FAILED_XR_ABORT(res = xrWaitSwapchainImage(chain, &waitInfo));
-
-	if (res == XR_TIMEOUT_EXPIRED)
-		OOVR_ABORTF("xrWaitSwapchainImage timeout");
+	WaitForSwapchainImage();
 
 	// Copy the source to the destination image
 	D3D11_BOX sourceRegion;
@@ -334,19 +332,15 @@ void DX11Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 		float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
 		context->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 
-		UINT numViewPorts;
-		context->RSGetViewports(&numViewPorts, nullptr);
-		std::vector<D3D11_VIEWPORT> viewports;
-		viewports.resize(numViewPorts);
-		context->RSGetViewports(&numViewPorts, viewports.data());
+		UINT numViewPorts = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+		D3D11_VIEWPORT viewports[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		context->RSGetViewports(&numViewPorts, viewports);
 
-		UINT numScissors;
-		context->RSGetScissorRects(&numScissors, nullptr);
-		std::vector<D3D11_RECT> scissors;
-		scissors.resize(numScissors);
-		context->RSGetScissorRects(&numScissors, scissors.data());
+		UINT numScissors = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+		D3D11_RECT scissors[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE];
+		context->RSGetScissorRects(&numScissors, scissors);
 
-		ID3D11RasterizerState* pRSState;
+		ID3D11RasterizerState* pRSState = nullptr;
 		context->RSGetState(&pRSState);
 		context->RSSetState(nullptr);
 
@@ -378,12 +372,12 @@ void DX11Compositor::CopyToSwapchain(const vr::Texture_t* texture, const vr::VRT
 		context->IASetPrimitiveTopology(currTopology);
 		quad_texture_view->Release();
 
-		if (numViewPorts)
-			context->RSSetViewports(numViewPorts, viewports.data());
-		if (numScissors)
-			context->RSSetScissorRects(numScissors, scissors.data());
+		context->RSSetViewports(numViewPorts, viewports);
+		context->RSSetScissorRects(numScissors, scissors);
 
 		context->RSSetState(pRSState);
+		if (pRSState)
+			pRSState->Release();
 	} else {
 		// Apparently SteamVR supports apps just sending array textures without specifying what's what.
 		const int arrayIndex = (srcDesc.ArraySize > 1 && eye.has_value()) ? static_cast<int>(*eye) : 0;

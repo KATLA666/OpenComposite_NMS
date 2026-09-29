@@ -11,6 +11,34 @@ Feel free to comment on the spreadsheet for us to modify its information.
 
 <details><summary>Table of Contents</summary>
 
+NMS
+This Version contains a Performance Tracer for debugging purposis, when developing this Project. It can be activated with
+$env:OPENCOMPOSITE_PERF_TRACE = "1"
+The Trace can be Captured with DebugView and the filter: "[OC_PERF]"
+
+  dt          Laenge des Berichtsfensters in Sekunden.
+  api         OpenVR-Texturtyp: 0=DX11, 1=OpenGL, 2=Vulkan, 4=DX12.
+  endHz       Anzahl xrEndFrame-Aufrufe pro Sekunde, KEINE gemessenen
+              Display-FPS. Beinhaltet leere und fehlgeschlagene Abgaben.
+  periodMs    Zuletzt von OpenXR vorhergesagtes Display-Intervall;
+              nicht zwingend die native Bildwiederholrate des Headsets.
+  wait        CPU-Zeit in xrWaitFrame; normales Frame-Pacing ist enthalten.
+  begin       CPU-Zeit in xrBeginFrame.
+  views       CPU-Zeit fuer GetCachedViews nach Cache-Invalidierung.
+  copy        CPU-Zeit fuer Augen-/Skybox-Compositor::Invoke, einschliesslich
+              dortiger Swapchain-/Fence-Wartezeiten; fuer Augen PRO AUGE.
+  layers      CPU-Zeit in BaseOverlay::_BuildLayers.
+  end         CPU-Zeit in xrEndFrame.
+  post        CPU-Zeit in BaseSystem::_OnPostFrame inklusive InternalUpdate.
+  pump        CPU-Zeit in PumpEvents inklusive Profile-/Tracker-Verarbeitung.
+  timingCalls GetFrameTiming-Aufrufe im Fenster (auch via GetFrameTimings).
+  noRender    Frame-Vorgaben mit shouldRender=false im Fenster.
+  discarded   xrBeginFrame meldete XR_FRAME_DISCARDED im Fenster.
+  sessions    Neu erstellte Sessions im Fenster.
+  profiles    Interaction-Profile-Changed-Ereignisse im Fenster.
+  endErrors   Negative xrEndFrame-Rueckgaben im Fenster.
+  overlays    Zuletzt beobachtete Anzahl registrierter Overlay-Compositors.
+
 [TOC]
 </details>
 
