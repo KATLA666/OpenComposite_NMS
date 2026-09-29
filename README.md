@@ -1,3 +1,138 @@
+# OpenComposite — No Man's Sky Compatibility Fork
+
+> **Unofficial third-party fork of [OpenComposite](https://gitlab.com/znixian/OpenOVR).**
+> This fork focuses on **No Man's Sky VR** compatibility and performance.
+
+This version fixes starting and walking issues, cockpit grabbing and interaction with flight controls, including the throttle and flight stick, and includes performance improvements.
+
+Testing has focused on **No Man's Sky**. Other games have not been tested.
+
+Thanks to the original [OpenComposite](https://gitlab.com/znixian/OpenOVR) authors and contributors for the foundation of this project.
+
+## Tested setup and performance
+
+In my own tests, I observed an improvement of approximately **+20–25 FPS** with the setup below. These results apply to this test configuration; performance will vary with hardware, runtime, settings, and scene.
+
+| Setting | Tested configuration |
+|---|---|
+| Comparison baseline | SteamVR |
+| Fork version | 06a154bb |
+| No Man's Sky version | 7.04 |
+| GPU | NVIDIA GeForce RTX 3060 Ti |
+| CPU | AMD Ryzen 9 5900X |
+| Headset | Meta Quest 3 |
+| Headset connection | Virtual Desktop |
+| Refresh rate and render resolution | 2496x2688@90Hz |
+
+
+## Known issues
+
+> [!NOTE]
+> **DLSS Quality** caused a significant performance problem in my test setup.
+> The other DLSS modes I tested did not show the same problem.
+> This may be specific to my system; the cause has not been confirmed.
+
+## Installation and rollback
+
+Follow the installation instructions in the original OpenComposite README below, using a **release build of this fork**.
+
+For a per-game DLL installation, back up the original DLL before replacing it. To undo that installation, close the game and restore the original DLL.
+
+## Reporting issues
+
+Please report problems with this fork in this repository's **Issues**. Include:
+
+- The fork release or commit and your No Man's Sky version.
+- GPU, CPU, headset, connection method, and active OpenXR runtime.
+- Render resolution, refresh rate, DLSS mode, and reprojection settings.
+- Steps to reproduce the issue and whether it happens on foot, in the cockpit, or both.
+- For performance problems: FPS measurement tool, elapsed playtime before the slowdown, and a performance trace if available.
+
+## Performance tracing
+
+An optional performance tracer is included for debugging. **It is disabled by default.**
+
+When enabled, it emits two summary lines approximately every five seconds while frame processing continues. Tracing adds overhead, so leave it disabled for normal play and FPS comparisons.
+
+<details>
+<summary>How to enable tracing and interpret the output</summary>
+
+### Enable tracing on Windows
+
+**Close No Man's Sky and Steam completely first.** Then open PowerShell and run:
+
+```powershell
+$env:OPENCOMPOSITE_PERF_TRACE = "1"
+
+# Adjust the Steam installation path if necessary.
+& "C:\Program Files (x86)\Steam\steam.exe"
+```
+
+Start No Man's Sky in VR through this newly started Steam process.
+
+The environment variable applies to this PowerShell session and processes started from it. An already running Steam process will not inherit the change. For another launcher, start that launcher from the same PowerShell session instead.
+
+Open [DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview), enable **Capture Win32**, and filter for:
+
+```text
+[OC_PERF]
+```
+
+The tracer also works in release builds. The setting is read only once per process, so changing it while the game is running has no effect.
+
+### Disable tracing
+
+Close No Man's Sky and the launcher started from the tracing session. In the same PowerShell window, run:
+
+```powershell
+Remove-Item Env:OPENCOMPOSITE_PERF_TRACE -ErrorAction SilentlyContinue
+```
+
+Restart the launcher and game. The commands above do not create a persistent system-wide environment variable.
+
+### Reading the trace
+
+The timing fields (`wait`, `begin`, `views`, `copy`, `layers`, `end`, `post`, and `pump`) use **average/maximum milliseconds per call** over the reporting window.
+
+For example, `copy=0.400/3.200` means an average of **0.400 ms** and a maximum of **3.200 ms** per measured call.
+
+These are **CPU-side elapsed times, including waits**. They are not measurements of pure CPU execution time or GPU execution time. Do not add the averages to calculate total frame time: call counts differ and measured scopes may overlap.
+
+| Field | Description |
+|---|---|
+| `dt` | Length of the reporting window in seconds. |
+| `api` | OpenVR texture type: `0 = DX11`, `1 = OpenGL`, `2 = Vulkan`, `4 = DX12`. |
+| `endHz` | Number of `xrEndFrame` calls per second. **Not measured display FPS.** Includes empty and failed submissions. |
+| `periodMs` | Most recently predicted OpenXR display interval in milliseconds. This does not necessarily correspond to the headset's native refresh rate. |
+| `wait` | Elapsed time in `xrWaitFrame`, including normal frame pacing. |
+| `begin` | Elapsed time in `xrBeginFrame`. |
+| `views` | Elapsed time in `GetCachedViews` after cache invalidation. |
+| `copy` | Elapsed time in eye/skybox `Compositor::Invoke`, including swapchain/fence waits. For eye rendering, measured **per eye**. |
+| `layers` | Elapsed time in `BaseOverlay::_BuildLayers`. |
+| `end` | Elapsed time in `xrEndFrame`. |
+| `post` | Elapsed time in `BaseSystem::_OnPostFrame`, including `InternalUpdate`. |
+| `pump` | Elapsed time in `PumpEvents`, including profile/tracker processing. |
+| `timingCalls` | Number of `GetFrameTiming` calls during the reporting window, including calls through `GetFrameTimings`. |
+| `noRender` | Number of frame predictions with `shouldRender = false` during the reporting window. |
+| `discarded` | Number of times `xrBeginFrame` reported `XR_FRAME_DISCARDED` during the reporting window. |
+| `sessions` | Number of newly created sessions during the reporting window. |
+| `profiles` | Number of interaction-profile-changed events during the reporting window. |
+| `endErrors` | Number of negative `xrEndFrame` return values during the reporting window. |
+| `overlays` | Most recently observed number of registered overlay compositors. |
+
+A high `copy` value can include waiting for earlier GPU work and does not prove that the copy itself is expensive. Likewise, a high `wait` value can be normal frame pacing.
+
+</details>
+
+## License
+
+This fork retains OpenComposite's **GNU General Public License v3.0 or later**. See [LICENSE.txt](LICENSE.txt) and the existing third-party license notices in this repository.
+
+*Fork notes by KATLA66 — 2026-09-29*
+
+---
+
+
 # OpenComposite (OpenXR) - Play SteamVR games without SteamVR!
 [![Discord](https://img.shields.io/discord/499733750209314816.svg?style=for-the-badge&logo=discord&label=discord)](https://discord.gg/zYA6Tzs)
 [![AppVeyor](https://img.shields.io/appveyor/ci/ZNix/openovr.svg?style=for-the-badge&logo=appveyor)](https://ci.appveyor.com/project/ZNix/openovr)
@@ -10,34 +145,6 @@ See the **Tips for using OpenComposite** section for solutions to common issues.
 Feel free to comment on the spreadsheet for us to modify its information.
 
 <details><summary>Table of Contents</summary>
-
-NMS
-This Version contains a Performance Tracer for debugging purposis, when developing this Project. It can be activated with
-$env:OPENCOMPOSITE_PERF_TRACE = "1"
-The Trace can be Captured with DebugView and the filter: "[OC_PERF]"
-
-  dt          Laenge des Berichtsfensters in Sekunden.
-  api         OpenVR-Texturtyp: 0=DX11, 1=OpenGL, 2=Vulkan, 4=DX12.
-  endHz       Anzahl xrEndFrame-Aufrufe pro Sekunde, KEINE gemessenen
-              Display-FPS. Beinhaltet leere und fehlgeschlagene Abgaben.
-  periodMs    Zuletzt von OpenXR vorhergesagtes Display-Intervall;
-              nicht zwingend die native Bildwiederholrate des Headsets.
-  wait        CPU-Zeit in xrWaitFrame; normales Frame-Pacing ist enthalten.
-  begin       CPU-Zeit in xrBeginFrame.
-  views       CPU-Zeit fuer GetCachedViews nach Cache-Invalidierung.
-  copy        CPU-Zeit fuer Augen-/Skybox-Compositor::Invoke, einschliesslich
-              dortiger Swapchain-/Fence-Wartezeiten; fuer Augen PRO AUGE.
-  layers      CPU-Zeit in BaseOverlay::_BuildLayers.
-  end         CPU-Zeit in xrEndFrame.
-  post        CPU-Zeit in BaseSystem::_OnPostFrame inklusive InternalUpdate.
-  pump        CPU-Zeit in PumpEvents inklusive Profile-/Tracker-Verarbeitung.
-  timingCalls GetFrameTiming-Aufrufe im Fenster (auch via GetFrameTimings).
-  noRender    Frame-Vorgaben mit shouldRender=false im Fenster.
-  discarded   xrBeginFrame meldete XR_FRAME_DISCARDED im Fenster.
-  sessions    Neu erstellte Sessions im Fenster.
-  profiles    Interaction-Profile-Changed-Ereignisse im Fenster.
-  endErrors   Negative xrEndFrame-Rueckgaben im Fenster.
-  overlays    Zuletzt beobachtete Anzahl registrierter Overlay-Compositors.
 
 [TOC]
 </details>
