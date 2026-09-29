@@ -81,11 +81,14 @@ public:
 	template <typename T>
 	void print_result(const T* buffer, size_t size)
 	{
+		if (!oovr_global_configuration.LogGetTrackedProperty() || (!buffer && size != 0))
+			return;
 		std::string array = "{";
 		for (size_t i = 0; i < size; i++) {
-			array.append(std::to_string(buffer[i]) + ", ");
+			if (i != 0)
+				array.append(", ");
+			array.append(std::to_string(buffer[i]));
 		}
-		array.erase(array.end() - 2, array.end());
 		array.push_back('}');
 		OOVR_LOGF("dev: %u | prop: %u | result: %s", idx, prop, array.c_str());
 	}
@@ -232,7 +235,9 @@ HmdMatrix34_t BaseSystem::GetSeatedZeroPoseToStandingAbsoluteTrackingPose()
 	glm::mat4 m;
 	XrSpaceLocation location{ XR_TYPE_SPACE_LOCATION, nullptr, 0, {} };
 
-	OOVR_FAILED_XR_SOFT_ABORT(xrLocateSpace(xr_gbl->seatedSpace, xr_gbl->floorSpace, xr_gbl->GetBestTime(), &location));
+	const XrTime nmsTime = xr_gbl->GetBestTime();
+	const XrResult nmsResult = xrLocateSpace(xr_gbl->seatedSpace, xr_gbl->floorSpace, nmsTime, &location);
+	OOVR_FAILED_XR_SOFT_ABORT(nmsResult);
 
 	if ((location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
 		m = glm::mat4(X2G_quat(location.pose.orientation));
@@ -433,12 +438,17 @@ uint32_t BaseSystem::GetArrayTrackedDeviceProperty(vr::TrackedDeviceIndex_t unDe
 		return 0;
 	}
 
-	uint32_t ret = dev->GetArrayTrackedDeviceProperty(prop, propType, pBuffer, unBufferSize, pError);
-	if (oovr_global_configuration.LogGetTrackedProperty()) {
+	ETrackedPropertyError resultError = TrackedProp_Success;
+	uint32_t ret = dev->GetArrayTrackedDeviceProperty(prop, propType, pBuffer, unBufferSize, &resultError);
+	if (pError)
+		*pError = resultError;
+	// Sizes are bytes. A size-only, failed or undersized query has no readable array.
+	if (oovr_global_configuration.LogGetTrackedProperty() && resultError == TrackedProp_Success
+	    && pBuffer != nullptr && ret <= unBufferSize) {
 #define ARRAY_CASE(tag_type, actual_type)                         \
 	case k_un##tag_type##PropertyTag: {                           \
 		actual_type* buffer = static_cast<actual_type*>(pBuffer); \
-		p.print_result(buffer, unBufferSize);                     \
+		p.print_result(buffer, ret / sizeof(*buffer));             \
 	} break
 		switch (propType) {
 			ARRAY_CASE(Float, float);
@@ -466,8 +476,12 @@ uint32_t BaseSystem::GetStringTrackedDeviceProperty(vr::TrackedDeviceIndex_t unD
 		return 0;
 	}
 
-	uint32_t ret = dev->GetStringTrackedDeviceProperty(prop, value, bufferSize, pErrorL);
-	p.print_result(value);
+	ETrackedPropertyError resultError = TrackedProp_Success;
+	uint32_t ret = dev->GetStringTrackedDeviceProperty(prop, value, bufferSize, &resultError);
+	if (pErrorL)
+		*pErrorL = resultError;
+	if (resultError == TrackedProp_Success && value != nullptr && ret != 0 && ret <= bufferSize)
+		p.print_result(value);
 	return ret;
 }
 
@@ -706,7 +720,8 @@ bool BaseSystem::GetControllerState(vr::TrackedDeviceIndex_t controllerDeviceInd
 	if (frameNumber > 0)
 		inputSystem->LoadEmptyManifestIfRequired();
 
-	return inputSystem->GetLegacyControllerState(controllerDeviceIndex, controllerState);
+	const bool nmsResult = inputSystem->GetLegacyControllerState(controllerDeviceIndex, controllerState);
+	return nmsResult;
 }
 
 bool BaseSystem::GetControllerStateWithPose(ETrackingUniverseOrigin eOrigin, vr::TrackedDeviceIndex_t unControllerDeviceIndex,
@@ -863,11 +878,14 @@ void BaseSystem::PerformanceTestReportFidelityLevelChange(int nFidelityLevel)
 // Tracking origin stuff
 void BaseSystem::ResetSeatedZeroPose()
 {
-	if (BackendManager::Instance().IsGraphicsConfigured()) {
+	const bool nmsGraphics = BackendManager::Instance().IsGraphicsConfigured();
+	if (nmsGraphics) {
 		XrSpaceVelocity velocity{ XR_TYPE_SPACE_VELOCITY };
 		XrSpaceLocation location{ XR_TYPE_SPACE_LOCATION, &velocity, 0, {} };
 
-		OOVR_FAILED_XR_SOFT_ABORT(xrLocateSpace(xr_gbl->viewSpace, xr_gbl->seatedSpace, xr_gbl->GetBestTime(), &location));
+		const XrTime nmsTime = xr_gbl->GetBestTime();
+		const XrResult nmsResult = xrLocateSpace(xr_gbl->viewSpace, xr_gbl->seatedSpace, nmsTime, &location);
+		OOVR_FAILED_XR_SOFT_ABORT(nmsResult);
 
 		if ((location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
 			static XrReferenceSpaceCreateInfo spaceInfo{ XR_TYPE_REFERENCE_SPACE_CREATE_INFO, nullptr, XR_REFERENCE_SPACE_TYPE_LOCAL, { { 0.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } } };

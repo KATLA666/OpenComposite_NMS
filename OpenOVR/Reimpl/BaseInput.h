@@ -677,6 +677,16 @@ private:
 		static const ActionPerProfileData defaultActionData;
 
 		std::unordered_map<XrPath, XrBool32> analog_to_digital_last_state_subaction;
+
+		// Digital edge history belongs to this action, not to a process-wide handle map.
+		// Keep the existing syncSerialDigital / repeated-poll behavior.
+		struct DigitalChangeState {
+			bool lastState = false;
+			uint64_t lastChangedSerial = 0;
+			uint64_t evaluatedSerial = 0;
+		};
+		DigitalChangeState unrestrictedDigitalChangeState;
+		std::unordered_map<vr::VRInputValueHandle_t, DigitalChangeState> restrictedDigitalChangeStates;
 	};
 
 	enum class InputSource {
@@ -789,6 +799,9 @@ private:
 	bool usingLegacyInput = false;
 	Registry<ActionSet> actionSets;
 	Registry<Action> actions;
+	// Manifest-order subset used by the existing inactive D-pad parent fallback.
+	// These action handles live until the manifest's action sets are destroyed.
+	std::vector<XrAction> dpadCameraActions;
 	bool allowSetDominantHand = false;
 	// True while we are in the middle of a session restart request
 	// Necessary for BindInputsForSession (see comments there)
