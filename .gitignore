@@ -9,8 +9,14 @@
 # CMake files
 /build
 
+# Patches
+/.patches
+
 # Visual Studio
 /.vs
+/out
+*.slnx
+
 
 # Visual Studio Code
 /.vscode
@@ -33,6 +39,7 @@
 /OpenOVR/Reimpl/GVR*.gen.h
 
 # Python cache
+/.venv
 /scripts/__pycache__
 /scripts/stubs/__pycache__
 
