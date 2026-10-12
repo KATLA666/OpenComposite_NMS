@@ -5,6 +5,8 @@
 
 This version fixes starting and walking issues, cockpit grabbing and interaction with flight controls, including the throttle and flight stick, and includes performance improvements.
 
+There is still a small bug, with the right hand widget. You can only interact with physical touch, the trigger button does currently not work.
+
 Testing has focused on **No Man's Sky**. Other games have not been tested.
 
 Thanks to the original [OpenComposite](https://gitlab.com/znixian/OpenOVR) authors and contributors for the foundation of this project.
@@ -17,7 +19,7 @@ In my own tests, I observed an improvement of approximately **+20–25 FPS** wit
 |---|---|
 | Comparison baseline | SteamVR |
 | Fork version | 06a154bb |
-| No Man's Sky version | 7.04 |
+| No Man's Sky version | 7.06 |
 | GPU | NVIDIA GeForce RTX 3060 Ti |
 | CPU | AMD Ryzen 9 5900X |
 | Headset | Meta Quest 3 |
@@ -36,7 +38,7 @@ In my own tests, I observed an improvement of approximately **+20–25 FPS** wit
 
 Follow the installation instructions in the original OpenComposite README below, using a **release build of this fork**.
 
-For a per-game DLL installation, back up the original DLL before replacing it. To undo that installation, close the game and restore the original DLL.
+For a per-game DLL installation, back up the original ```openvr_api.dll```, then replace it with the one provided here. To undo that installation, close the game and restore the original DLL.
 
 ## Reporting issues
 
