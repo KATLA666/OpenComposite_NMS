@@ -149,6 +149,9 @@ int Config::ini_handler(void* user, const char* pSection,
 		CFGOPT(bool, initUsingVulkan);
 		CFGOPT(float, hiddenMeshVerticalScale);
 		CFGOPT(bool, logAllOpenVRCalls);
+		CFGOPT(float, cameraTurnScale);
+		CFGOPT(float, cameraTurnExponent);
+		CFGOPT(float, cameraDeadzone);
 	}
 
 #undef CFGOPT

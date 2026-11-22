@@ -8,6 +8,7 @@
 #include <glm/gtx/quaternion.hpp>
 #define BASE_IMPL
 #include "BaseInput.h"
+#include "NmsHandMenuTrace.h"
 
 #include <convert.h>
 
@@ -291,6 +292,7 @@ static void InterpolateBone(VRBoneTransform_t& bone, const VRBoneTransform_t& ta
 
 static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceType hand, const LegacyControllerActions controller) //katla66
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::FingerState);
 	struct ControllerState {
 		float triggerPct;
 		float gripPct;
@@ -318,6 +320,8 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 		OOVR_LOGF("WARNING: couldn't get trigger percentage (%d)", actionRes);
 	}
 
+	const XrResult nmsTriggerResult = actionRes;
+	const XrActionStateFloat nmsTriggerState = state;
 	// Grip State
 	info.action = controller.grip;
 	actionRes = xrGetActionStateFloat(xr_session.get(), &info, &state);
@@ -328,10 +332,14 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 		OOVR_LOGF("WARNING: couldn't get grip percentage (%d)", actionRes);
 	}
 
+	const XrResult nmsGripResult = actionRes;
+	const XrActionStateFloat nmsGripState = state;
 	// Trigger Touch State
 	info.action = controller.triggerTouch;
 	actionRes = xrGetActionStateBoolean(xr_session.get(), &info, &stateBool);
 	bool triggerTouch = XR_SUCCEEDED(actionRes) && stateBool.currentState;
+	const XrResult nmsTouchResult = actionRes;
+	const XrActionStateBoolean nmsTouchState = stateBool;
 
 	// Force touch to true when trigger is being pressed
 	if (output.triggerPct != 0.0f)
@@ -394,6 +402,18 @@ static auto GetInterpolatedControllerState(const ITrackedDevice::TrackedDeviceTy
 	}
 	// -----------------------------------
 
+	if (NmsHandMenuTrace::Enabled() && int(hand) >= 0 && int(hand) < 2) {
+		const uint64_t signature = uint64_t(nmsTriggerState.isActive != 0)
+		    | (uint64_t(nmsTriggerState.currentState >= 0.7f) << 1)
+		    | (uint64_t(nmsTouchState.currentState != 0) << 2)
+		    | (uint64_t(nmsHandForce > 0.5f) << 3);
+		if (NmsHandMenuTrace::Gate(124 + int(hand), signature))
+			NmsHandMenuTrace::Print("FINGERS hand=%d trigger[result=%d A=%d raw=%.3f] grip[result=%d A=%d raw=%.3f] touch[result=%d A=%d raw=%d] digitalGrip=%.3f output[trigger=%.3f grip=%.3f triggerTouch=%.3f thumbTouch=%.3f]",
+			    int(hand), int(nmsTriggerResult), int(nmsTriggerState.isActive), double(nmsTriggerState.currentState),
+			    int(nmsGripResult), int(nmsGripState.isActive), double(nmsGripState.currentState),
+			    int(nmsTouchResult), int(nmsTouchState.isActive), int(nmsTouchState.currentState), double(nmsHandForce),
+			    double(output.triggerPct), double(output.gripPct), double(output.triggerTouchPct), double(output.thumbTouchPct));
+	}
 	return output;
 }
 
@@ -539,6 +559,7 @@ EVRInputError BaseInput::getEstimatedBoneData( //katla66
     EVRSkeletalMotionRange eMotionRange,
     std::span<VRBoneTransform_t, eBone_Count> boneData)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::EstimatedBones);
 	auto& controller = legacyControllers[hand];
 
 	auto state = GetInterpolatedControllerState(hand, controller);
@@ -611,6 +632,19 @@ EVRInputError BaseInput::getEstimatedBoneData( //katla66
 	if (transformSpace == EVRSkeletalTransformSpace::VRSkeletalTransformSpace_Model)
 		ParentSpaceSkeletonToModelSpace(boneData.data());
 
+	if (NmsHandMenuTrace::Enabled() && int(hand) >= 0 && int(hand) < 2 && NmsHandMenuTrace::Gate(140 + int(hand), 0)) {
+		// Convert only a local copy for diagnostics. The game's output is untouched.
+		BoneArray probeBones;
+		std::copy_n(boneData.data(), eBone_Count, probeBones.begin());
+		if (transformSpace == VRSkeletalTransformSpace_Parent)
+			ParentSpaceSkeletonToModelSpace(probeBones.data());
+		const auto& wrist = probeBones[eBone_Wrist];
+		const auto& tip = probeBones[eBone_IndexFinger4];
+		NmsHandMenuTrace::Print("BONES hand=%d source=estimated requestedSpace=%d range=%d diagnosticSpace=model wrist=[%.4f %.4f %.4f] indexTip=[%.4f %.4f %.4f] tipQuat=[%.4f %.4f %.4f %.4f]",
+		    int(hand), int(transformSpace), int(eMotionRange), double(wrist.position.v[0]), double(wrist.position.v[1]), double(wrist.position.v[2]),
+		    double(tip.position.v[0]), double(tip.position.v[1]), double(tip.position.v[2]),
+		    double(tip.orientation.w), double(tip.orientation.x), double(tip.orientation.y), double(tip.orientation.z));
+	}
 	return vr::VRInputError_None;
 }
 
@@ -708,6 +742,7 @@ EVRInputError BaseInput::getEstimatedBoneData(
 
 EVRInputError BaseInput::getEstimatedSkeletalSummary(ITrackedDevice::TrackedDeviceType hand, VRSkeletalSummaryData_t* pSkeletalSummaryData)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::EstimatedSummary);
 	OOVR_FALSE_ABORT(hand != ITrackedDevice::HAND_NONE);
 
 	std::fill(std::begin(pSkeletalSummaryData->flFingerSplay), std::end(pSkeletalSummaryData->flFingerSplay), 0.2f);

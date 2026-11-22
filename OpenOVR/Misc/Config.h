@@ -18,6 +18,9 @@ public:
 	inline bool InitUsingVulkan() const { return initUsingVulkan; }
 	float HiddenMeshVerticalScale() const { return hiddenMeshVerticalScale; }
 	inline bool LogAllOpenVRCalls() const { return logAllOpenVRCalls; }
+	inline float CameraTurnScale() const { return cameraTurnScale; }
+	inline float CameraTurnExponent() const { return cameraTurnExponent; }
+	inline float CameraDeadzone() const { return cameraDeadzone; }
 
 private:
 	static int ini_handler(
@@ -38,6 +41,9 @@ private:
 	bool initUsingVulkan = false;
 	float hiddenMeshVerticalScale = 1.0f;
 	bool logAllOpenVRCalls = false;
+	float cameraTurnScale = 0.35f;
+	float cameraTurnExponent = 1.5f;
+	float cameraDeadzone = 0.10f;
 };
 
 extern Config oovr_global_configuration;

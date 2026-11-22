@@ -5,6 +5,7 @@
 #include "BaseInput.h"
 #include "BaseOverlay.h"
 #include "BaseSystem.h"
+#include "NmsHandMenuTrace.h"
 #include "Drivers/Backend.h"
 #include "Misc/Config.h"
 #include "convert.h"
@@ -225,9 +226,24 @@ bool BaseSystem::SetDisplayVisibility(bool bIsVisibleOnDesktop)
 void BaseSystem::GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin toOrigin, float predictedSecondsToPhotonsFromNow,
     TrackedDevicePose_t* poseArray, uint32_t poseArrayCount)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::SystemPoses);
 	//NMS does not call this function katla66
 
 	BackendManager::Instance().GetDeviceToAbsoluteTrackingPose(toOrigin, predictedSecondsToPhotonsFromNow, poseArray, poseArrayCount);
+	if (NmsHandMenuTrace::Enabled()) {
+		for (int hand = 0; hand < 2; ++hand) {
+			if (!NmsHandMenuTrace::Gate(130 + hand, 0)) continue;
+			auto device = BackendManager::Instance().GetDeviceByHand(static_cast<ITrackedDevice::TrackedDeviceType>(hand));
+			if (!device) {
+				NmsHandMenuTrace::Print("POSE api=System.GetDeviceToAbsoluteTrackingPose hand=%d device=<missing>", hand);
+				continue;
+			}
+			const auto index = device->DeviceIndex();
+			const auto* poses = poseArray;
+			const uint32_t count = poseArrayCount;
+			NmsHandMenuTrace::PosePermitted("System.GetDeviceToAbsoluteTrackingPose", hand, index, int(toOrigin), poses && index < count ? poses + index : nullptr);
+		}
+	}
 }
 
 HmdMatrix34_t BaseSystem::GetSeatedZeroPoseToStandingAbsoluteTrackingPose()

@@ -126,6 +126,27 @@ A high `copy` value can include waiting for earlier GPU work and does not prove 
 
 </details>
 
+## Adjusting Smooth Turn Sensitivity
+
+Smooth-turn speed, response curve, and deadzone can be configured in `opencomposite.ini`.
+
+Place or create `opencomposite.ini` next to `openvr_api.dll` in the game's working directory . Add or edit the following options under `[default]` (or at the top of the file):
+
+```ini
+[default]
+cameraTurnScale=0.35
+cameraTurnExponent=1.5
+cameraDeadzone=0.10
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `cameraTurnScale` | `0.35` | Multiplies camera stick turn speed (`0.0`–`1.0`). Lower values turn slower (e.g., `0.20`); `1.0` restores full raw speed. |
+| `cameraTurnExponent` | `1.5` | Stick response curve (`>= 0.1`). `1.0` is linear; higher values make small stick tilts finer while keeping full deflection responsive. |
+| `cameraDeadzone` | `0.10` | Minimum radial deadzone (`0.0`–`0.95`) applied to camera stick input to prevent drift and twitchy micro-turns. |
+
+Restart No Man's Sky after editing `opencomposite.ini` for changes to take effect.
+
 ## License
 
 This fork retains OpenComposite's **GNU General Public License v3.0 or later**. See [LICENSE.txt](LICENSE.txt) and the existing third-party license notices in this repository.

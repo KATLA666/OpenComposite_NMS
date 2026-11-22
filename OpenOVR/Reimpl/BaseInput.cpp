@@ -9,6 +9,7 @@
 #include <convert.h>
 
 #include "Drivers/Backend.h"
+#include "Misc/Config.h"
 #include "generated/static_bases.gen.h"
 #include <algorithm>
 #include <array>
@@ -32,6 +33,7 @@
 #include <utility>
 
 #include "Misc/xrmoreutils.h"
+#include "NmsTurnTrace.h"
 
 // Use RenderModels for the pose offsets, which are the same as component positions
 #include "BaseRenderModels.h"
@@ -377,6 +379,9 @@ EVRInputError BaseInput::GetEyeTrackingDataForNextFrame(VRActionHandle_t action,
 
 EVRInputError BaseInput::SetActionManifestPath(const char* pchActionManifestPath)
 {
+	NmsTurnTrace::BootOnce();
+	if (NmsTurnTrace::Enabled())
+		NmsTurnTrace::Print("MANIFEST path=%s", pchActionManifestPath ? pchActionManifestPath : "<null>");
 	OOVR_LOGF("Loading manifest file '%s'", pchActionManifestPath);
 
 	//////////////
@@ -961,7 +966,16 @@ void BaseInput::LoadBindingsSet(const InteractionProfile& profile, const std::st
 					pathStr = profile.TranslateAction(importBasePath + "/" + inputName);
 				}
 
-				if (!profile.IsInputPathValid(pathStr)) {
+				const bool validPath = profile.IsInputPathValid(pathStr);
+				if (NmsTurnTrace::Enabled() && NmsTurnTrace::IsTurnName(action->fullName.c_str())) {
+					const auto pdIt = action->perProfileData.find(&profile);
+					const auto& pd = pdIt != action->perProfileData.end() ? pdIt->second : Action::defaultActionData;
+					NmsTurnTrace::Print("BIND_DIRECT profile=%s file=%s act=%s type=%d mode=%s input=%s src=%s -> %s valid=%d dz=%.3f max=%.3f thr=%.3f/%.3f",
+					    profile.GetPath().c_str(), bindingsPath.c_str(), action->fullName.c_str(), static_cast<int>(action->type),
+					    srcJson["mode"].asString().c_str(), inputName.c_str(), importBasePath.c_str(), pathStr.c_str(), int(validPath),
+					    double(pd.deadzone), double(pd.maxzone), double(pd.click_activate_threshold), double(pd.click_deactivate_threshold));
+				}
+				if (!validPath) {
 					OOVR_LOGF("WARNING: Built invalid input path %s for profile %s from action %s, skipping",
 					    pathStr.c_str(), profile.GetPath().c_str(), actionName.c_str());
 					continue;
@@ -1167,6 +1181,11 @@ void BaseInput::LoadDpadAction(const InteractionProfile& profile, const std::str
 
 	// add dpad parent to action
 	action->perProfileData[&profile].dpadBindings.push_back({ parentName, dpad_info });
+	if (NmsTurnTrace::Enabled() && NmsTurnTrace::IsTurnName(action->fullName.c_str())) {
+		NmsTurnTrace::Print("BIND_DPAD profile=%s act=%s dir=%s subMode=%s src=%s parent=%s parentPath=%s click=%d manualThr=%d",
+		    profile.GetPath().c_str(), action->fullName.c_str(), inputName.c_str(), subMode.c_str(),
+		    importBasePath.c_str(), parentName.c_str(), parentPath.c_str(), int(dpad_info.click), int(dpad_info.customClickThresholds));
+	}
 }
 
 void BaseInput::LoadDClickAction(const InteractionProfile& profile, const std::string& importBasePath, Action* action, std::vector<XrActionSuggestedBinding>& bindings)
@@ -1388,6 +1407,22 @@ EVRInputError BaseInput::UpdateActionState(VR_ARRAY_COUNT(unSetCount) VRActiveAc
 	XrActionsSyncInfo syncInfo = { XR_TYPE_ACTIONS_SYNC_INFO };
 	syncInfo.activeActionSets = aas;
 	syncInfo.countActiveActionSets = activeSetCount;
+	if (NmsTurnTrace::Enabled()) {
+		NmsTurnTrace::BootOnce();
+		NmsTurnTrace::syncCount.fetch_add(1, std::memory_order_relaxed);
+		std::string setsSummary;
+		for (uint32_t i = 0; i < unSetCount; i++) {
+			ActionSet* as = cast_ASH(pSets[i].ulActionSet);
+			const char* restrictPath = pSets[i].ulRestrictedToDevice ? cast_IVH(pSets[i].ulRestrictedToDevice)->path.c_str() : "<all>";
+			if (i > 0) setsSummary += "|";
+			setsSummary += (as ? as->fullName : "<null>") + "[" + restrictPath + "]";
+		}
+		if (NmsTurnTrace::Gate("SETS", NmsTurnTrace::Hash(setsSummary.c_str()), 0, 5000))
+			NmsTurnTrace::Print("SETS sync=%llu count=%u active=%s", static_cast<unsigned long long>(syncSerial + 1), unSetCount, setsSummary.c_str());
+		const char* profL = (!handInteractionProfiles.empty() && handInteractionProfiles[0]) ? handInteractionProfiles[0]->GetPath().c_str() : "<null>";
+		const char* profR = (handInteractionProfiles.size() > 1 && handInteractionProfiles[1]) ? handInteractionProfiles[1]->GetPath().c_str() : "<null>";
+		NmsTurnTrace::ReportRateIfDue(profL, profR);
+	}
 
 	// --- KORRIGIERTE PROBE 1: ACTION SET SYNC --- katla66
 	/*
@@ -1427,6 +1462,12 @@ EVRInputError BaseInput::UpdateActionState(VR_ARRAY_COUNT(unSetCount) VRActiveAc
 		if (handInteractionProfiles[i] != newProfile) {
 			OOVR_LOGF("Hand %s switching to profile %s", allSubactionPathNames[i].c_str(), newProfile == nullptr ? "<null>" : newProfile->GetPath().c_str());
 			handInteractionProfiles[i] = newProfile;
+			if (NmsTurnTrace::Enabled()) {
+				const char* ovrName = (newProfile && newProfile->GetOpenVRName().has_value()) ? newProfile->GetOpenVRName().value() : "<none>";
+				NmsTurnTrace::Print("PROFILE hand=%s path=%s openvr=%s sync=%llu",
+				    allSubactionPathNames[i].c_str(), newProfile == nullptr ? "<null>" : newProfile->GetPath().c_str(),
+				    ovrName, static_cast<unsigned long long>(syncSerial));
+			}
 		}
 	}
 
@@ -1511,8 +1552,17 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 		state->next = nullptr;
 
 		// actions could be bound to regular buttons and dpad buttons
-		if ((perProfileData.dpadBindings.empty() && perProfileData.dclickBindings.empty()) || state->currentState == XR_TRUE)
+		if ((perProfileData.dpadBindings.empty() && perProfileData.dclickBindings.empty()) || state->currentState == XR_TRUE) {
+			if (NmsTurnTrace::Enabled() && NmsTurnTrace::IsTurnName(action.fullName.c_str()) && (state->currentState == XR_TRUE || fstate.currentState > 0.01f)) {
+				uint64_t sig = uint64_t(state->isActive) | (uint64_t(state->currentState) << 1) | (uint64_t(NmsTurnTrace::AnalogBucket(value) + 16) << 4);
+				if (NmsTurnTrace::Gate(std::string("DIRECT:") + action.fullName, sig, 50, 2000))
+					NmsTurnTrace::Print("BOOL_DIRECT act=%s A=%d S=%d val=%.4f thr=%.3f/%.3f dpadCount=%zu",
+					    action.fullName.c_str(), int(state->isActive), int(state->currentState), double(value),
+					    double(perProfileData.click_activate_threshold), double(perProfileData.click_deactivate_threshold),
+					    perProfileData.dpadBindings.size());
+			}
 			return ret;
+		}
 	}
 
 	bool compoundLastState = false;
@@ -1590,6 +1640,8 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 			// Wenn NMS das DPAD-Parent in ein inaktives Set gesperrt hat (z.B. Frontend),
 			// suchen wir eine aktive Analog-Aktion, aber STRENG getrennt nach Hand!
 			
+			const bool parentWasActive = parent_state.isActive != XR_FALSE;
+			bool usedCameraFallback = false;
 			if (!parent_state.isActive) {
 				for (XrAction cameraAction : dpadCameraActions) {
 					XrActionStateGetInfo fallbackInfo = *getInfo;
@@ -1599,6 +1651,7 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 					if (xrGetActionStateVector2f(xr_session.get(), &fallbackInfo, &fallbackState) == XR_SUCCESS
 					    && fallbackState.isActive) {
 						parent_state = fallbackState;
+						usedCameraFallback = true;
 						break;
 					}
 				}
@@ -1662,6 +1715,7 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 			// Wenn die kapazitiven Touch-Sensoren fehlschlagen, erzwingen wir die Aktion nur,
 			// wenn der Radius die Deadzone verlässt UND es sich um den RECHTEN Stick (Kamera/Snap-Turn) handelt.
 			// Der linke Stick bleibt unangetastet, damit das Laufen nicht vom HUD blockiert wird!
+			const bool activeBeforeFix2 = active;
 			if (radius > DpadBindingInfo::dpadDeadzoneRadius) {
 				if (parent_name.find("right") != std::string::npos) {
 					active = true;
@@ -1670,6 +1724,16 @@ XrResult BaseInput::getBooleanOrDpadData(const InteractionProfile* profile, Acti
 			// -----------------------------------------
 
 			bool currentState = active && within_bounds;
+			if (NmsTurnTrace::Enabled() && NmsTurnTrace::IsTurnName(action.fullName.c_str()) && (radius > 0.05f || currentState || currentState != dpad_info.lastState)) {
+				uint64_t sig = uint64_t(currentState) | (uint64_t(activeBeforeFix2) << 1) | (uint64_t(active) << 2) | (uint64_t(within_bounds) << 3)
+				    | (uint64_t(parentWasActive) << 4) | (uint64_t(usedCameraFallback) << 5)
+				    | (uint64_t(NmsTurnTrace::AnalogBucket(parent_state.currentState.x) + 16) << 8);
+				if (NmsTurnTrace::Gate(std::string("DPAD:") + action.fullName + ":" + parent_name, sig, 50, 2000))
+					NmsTurnTrace::Print("DPAD_EVAL act=%s parent=%s parentA=%d fallback=%d raw=[%.4f %.4f] r=%.4f click=%d actRaw=%d actFix2=%d inB=%d S=%d",
+					    action.fullName.c_str(), parent_name.c_str(), int(parentWasActive), int(usedCameraFallback),
+					    double(parent_state.currentState.x), double(parent_state.currentState.y), double(radius),
+					    int(dpad_info.click), int(activeBeforeFix2), int(active), int(within_bounds), int(currentState));
+			}
 			if (currentState)
 				state->currentState = XR_TRUE;
 
@@ -1812,6 +1876,18 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 	// -----------------------------
 
 	pActionData->fUpdateTime = 0.0f; //katla66
+	if (NmsTurnTrace::Enabled() && (pActionData->bState || pActionData->bChanged || NmsTurnTrace::IsTurnName(act->fullName.c_str()))) {
+		const char* restrictPath = ulRestrictToDevice ? cast_IVH(ulRestrictToDevice)->path.c_str() : "<all>";
+		const char* originPath = pActionData->activeOrigin ? cast_IVH(pActionData->activeOrigin)->path.c_str() : "<none>";
+		uint64_t sig = uint64_t(pActionData->bActive) | (uint64_t(pActionData->bState) << 1) | (uint64_t(pActionData->bChanged) << 2);
+		sig = NmsTurnTrace::Mix(sig, ulRestrictToDevice);
+		sig = NmsTurnTrace::Mix(sig, pActionData->activeOrigin);
+		const uint64_t heartbeat = pActionData->bState ? 250 : 5000;
+		if (NmsTurnTrace::Gate(std::string("DIG:") + act->fullName + ":" + restrictPath, sig, 0, heartbeat))
+			NmsTurnTrace::Print("DIG act=%s sync=%llu restrict=%s A=%d S=%d C=%d origin=%s",
+			    act->fullName.c_str(), static_cast<unsigned long long>(syncSerial), restrictPath,
+			    int(pActionData->bActive), int(pActionData->bState), int(pActionData->bChanged), originPath);
+	}
 
 	// --- DIAGNOSTIC OVERRIDE (BRUTE-FORCE GRAB) --- // katla66
 	// Greift bei /actions/shipcontrols_right/in/interact und interactleft
@@ -1829,6 +1905,7 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 
 	ZeroMemory(pActionData, unActionDataSize);
 	OOVR_FALSE_ABORT(unActionDataSize == sizeof(*pActionData));
+	if (NmsTurnTrace::Enabled()) NmsTurnTrace::digitalCount.fetch_add(1, std::memory_order_relaxed);
 
 	XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
 	getInfo.action = act->xr;
@@ -2116,6 +2193,8 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 
 	XrActionStateGetInfo getInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
 	getInfo.action = act->xr;
+	NmsTurnTrace::AnalogSample turnRaw[2]{};
+	if (NmsTurnTrace::Enabled()) NmsTurnTrace::analogCount.fetch_add(1, std::memory_order_relaxed);
 
 	// Only return the input with the greatest magnitude
 	float maxLengthSq = 0;
@@ -2141,6 +2220,10 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 				continue;
 
 			isDeviceActive = true; // katla66
+			if (NmsTurnTrace::Enabled() && i < 2) {
+				turnRaw[i] = { true, true, state.changedSinceLastSync != XR_FALSE,
+				    state.currentState, 0.0f, action_per_profile_data.deadzone, action_per_profile_data.maxzone };
+			}
 
 			float length = fabs(state.currentState);
 			if (length < action_per_profile_data.deadzone)
@@ -2185,19 +2268,35 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 				continue;
 
 			isDeviceActive = true; //katla66
+			if (NmsTurnTrace::Enabled() && i < 2) {
+				turnRaw[i] = { true, true, state.changedSinceLastSync != XR_FALSE,
+				    state.currentState.x, state.currentState.y, action_per_profile_data.deadzone, action_per_profile_data.maxzone };
+			}
 
 			float lengthSq = state.currentState.x * state.currentState.x + state.currentState.y * state.currentState.y;
 			float length = std::sqrt(lengthSq);
 
-			if (length < action_per_profile_data.deadzone)
+			const bool isCameraAction = act->fullName.find("camera") != std::string::npos;
+			float deadzone = action_per_profile_data.deadzone;
+			if (isCameraAction) {
+				deadzone = std::max(deadzone, std::clamp(oovr_global_configuration.CameraDeadzone(), 0.0f, 0.95f));
+			}
+			if (length <= deadzone)
 				continue;
 
 			// Avoid division by zero by checking if maxzone and deadzone are equal
-			if (std::abs(action_per_profile_data.maxzone - action_per_profile_data.deadzone) < std::numeric_limits<float>::epsilon())
+			if (action_per_profile_data.maxzone - deadzone < std::numeric_limits<float>::epsilon())
 				continue;
 
-			float normalizedLength = (length - action_per_profile_data.deadzone) / (action_per_profile_data.maxzone - action_per_profile_data.deadzone);
+			float normalizedLength = (length - deadzone) / (action_per_profile_data.maxzone - deadzone);
 			normalizedLength = std::min(1.0f, normalizedLength);
+			if (isCameraAction) {
+				const float exponent = std::max(0.1f, oovr_global_configuration.CameraTurnExponent());
+				if (exponent != 1.0f) {
+					normalizedLength = std::pow(normalizedLength, exponent);
+				}
+				normalizedLength = std::clamp(normalizedLength * std::max(0.0f, oovr_global_configuration.CameraTurnScale()), 0.0f, 1.0f);
+			}
 
 			// Calculate normalized vector components
 			float scale;
@@ -2226,10 +2325,10 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 			pActionData->activeOrigin = activeOriginFromSubaction(act, allSubactionPathNames[i].c_str());
 
 			if (syncSerial > act->previousSerial) {
-				act->deltaState.x = state.currentState.x - act->previousState.x;
-				act->deltaState.y = state.currentState.y - act->previousState.y;
-				act->previousState.x = state.currentState.x;
-				act->previousState.y = state.currentState.y;
+				act->deltaState.x = normalizedState.x - act->previousState.x;
+				act->deltaState.y = normalizedState.y - act->previousState.y;
+				act->previousState.x = normalizedState.x;
+				act->previousState.y = normalizedState.y;
 				act->previousSerial = syncSerial;
 			}
 
@@ -2253,9 +2352,43 @@ EVRInputError BaseInput::GetDigitalActionData(VRActionHandle_t action, InputDigi
 	if (!foundValidInput) { //katla66
 		// Bleibt aktiv, auch wenn wir 0.0 zurückgeben!
 		pActionData->bActive = isDeviceActive;
+		if (ulRestrictToDevice == vr::k_ulInvalidInputValueHandle && syncSerial > act->previousSerial) {
+			act->deltaState.x = isDeviceActive ? -act->previousState.x : 0.0f;
+			act->deltaState.y = isDeviceActive ? -act->previousState.y : 0.0f;
+			act->previousState.x = 0.0f;
+			act->previousState.y = 0.0f;
+			act->previousSerial = syncSerial;
+		}
+		if (isDeviceActive) {
+			pActionData->deltaX = act->deltaState.x;
+			pActionData->deltaY = act->deltaState.y;
+		}
 		pActionData->x = 0.0f;
 		pActionData->y = 0.0f;
 		pActionData->z = 0.0f;
+	}
+	if (NmsTurnTrace::Enabled()) {
+		const bool nonZero = std::fabs(pActionData->x) > 0.01f || std::fabs(pActionData->y) > 0.01f
+		    || std::fabs(pActionData->deltaX) > 0.001f || std::fabs(pActionData->deltaY) > 0.001f
+		    || std::fabs(turnRaw[0].x) > 0.01f || std::fabs(turnRaw[0].y) > 0.01f
+		    || std::fabs(turnRaw[1].x) > 0.01f || std::fabs(turnRaw[1].y) > 0.01f;
+		if (nonZero || NmsTurnTrace::IsTurnName(act->fullName.c_str())) {
+			const char* restrictPath = ulRestrictToDevice ? cast_IVH(ulRestrictToDevice)->path.c_str() : "<all>";
+			const char* originPath = pActionData->activeOrigin ? cast_IVH(pActionData->activeOrigin)->path.c_str() : "<none>";
+			uint64_t sig = uint64_t(pActionData->bActive);
+			sig = NmsTurnTrace::Mix(sig, static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(pActionData->x) + 16));
+			sig = NmsTurnTrace::Mix(sig, static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(pActionData->y) + 16));
+			sig = NmsTurnTrace::Mix(sig, static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(pActionData->deltaX) + 16));
+			sig = NmsTurnTrace::Mix(sig, static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(turnRaw[1].x) + 16));
+			const uint64_t heartbeat = nonZero ? 150 : 4000;
+			if (NmsTurnTrace::Gate(std::string("ANALOG:") + act->fullName + ":" + restrictPath, sig, 50, heartbeat))
+				NmsTurnTrace::Print("ANALOG act=%s type=%d sync=%llu restrict=%s A=%d val=[%.4f %.4f] delta=[%.4f %.4f] origin=%s L[A=%d raw=%.4f/%.4f dz=%.3f max=%.3f] R[A=%d raw=%.4f/%.4f dz=%.3f max=%.3f]",
+				    act->fullName.c_str(), static_cast<int>(act->type), static_cast<unsigned long long>(syncSerial),
+				    restrictPath, int(pActionData->bActive), double(pActionData->x), double(pActionData->y),
+				    double(pActionData->deltaX), double(pActionData->deltaY), originPath,
+				    int(turnRaw[0].active), double(turnRaw[0].x), double(turnRaw[0].y), double(turnRaw[0].deadzone), double(turnRaw[0].maxzone),
+				    int(turnRaw[1].active), double(turnRaw[1].x), double(turnRaw[1].y), double(turnRaw[1].deadzone), double(turnRaw[1].maxzone));
+		}
 	}
 
 	// Gibt dir für jeden Frame aus, welche Action NMS gerade abfragt und ob sie einen Wert liefert: katla66
@@ -3094,6 +3227,11 @@ EVRInputError BaseInput::GetActionBindingInfo(VRActionHandle_t actionHandle, OOV
 		count = unBindingInfoCount;
 	if (punReturnedBindingInfoCount)
 		*punReturnedBindingInfoCount = count;
+	if (NmsTurnTrace::Enabled() && NmsTurnTrace::IsTurnName(action->fullName.c_str())) {
+		if (NmsTurnTrace::Gate(std::string("BINDINFO:") + action->fullName, static_cast<uint64_t>(count), 0, 10000))
+			NmsTurnTrace::Print("BINDINFO act=%s type=%d count=%llu",
+			    action->fullName.c_str(), static_cast<int>(action->type), static_cast<unsigned long long>(count));
+	}
 
 	for (size_t i = 0; i < count; i++) {
 		OOVR_InputBindingInfo_t& info = bindingInfo[i];
@@ -3122,16 +3260,19 @@ EVRInputError BaseInput::GetActionBindingInfo(VRActionHandle_t actionHandle, OOV
 		// FIXME replace this initial hacky thing
 		switch (action->type) {
 		case ActionType::Boolean:
-			strcpy_arr(bindingInfo->rchModeName, "button");
-			strcpy_arr(bindingInfo->rchInputSourceType, "button");
+			strcpy_arr(info.rchModeName, "button");
+			strcpy_arr(info.rchSlotName, "click");
+			strcpy_arr(info.rchInputSourceType, "button");
 			break;
 		case ActionType::Vector1:
-			strcpy_arr(bindingInfo->rchModeName, "trigger");
-			strcpy_arr(bindingInfo->rchInputSourceType, "trigger");
+			strcpy_arr(info.rchModeName, "trigger");
+			strcpy_arr(info.rchSlotName, "pull");
+			strcpy_arr(info.rchInputSourceType, "trigger");
 			break;
 		case ActionType::Vector2:
-			strcpy_arr(bindingInfo->rchModeName, "joystick");
-			strcpy_arr(bindingInfo->rchInputSourceType, "joystick");
+			strcpy_arr(info.rchModeName, "joystick");
+			strcpy_arr(info.rchSlotName, "position");
+			strcpy_arr(info.rchInputSourceType, "joystick");
 			break;
 		default:
 			OOVR_ABORTF("Unimplemented action type %d for %s", static_cast<int>(action->type), pathStr.c_str());
@@ -3342,6 +3483,17 @@ bool BaseInput::GetLegacyControllerState(vr::TrackedDeviceIndex_t controllerDevi
 	VRControllerAxis_t& thumbstick = state->rAxis[0];
 	thumbstick.x = readFloat(ctrl.stickX);
 	thumbstick.y = readFloat(ctrl.stickY);
+	if (NmsTurnTrace::Enabled()) {
+		NmsTurnTrace::legacyCount.fetch_add(1, std::memory_order_relaxed);
+		if (std::fabs(thumbstick.x) > 0.05f || std::fabs(thumbstick.y) > 0.05f) {
+			uint64_t sig = NmsTurnTrace::Mix(static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(thumbstick.x) + 16),
+			    static_cast<uint64_t>(NmsTurnTrace::AnalogBucket(thumbstick.y) + 16));
+			if (NmsTurnTrace::Gate(std::string("LEGACY:") + std::to_string(hand), sig, 50, 1000))
+				NmsTurnTrace::Print("LEGACY hand=%d idx=%u stick=[%.4f %.4f] pressed=0x%llx usingLegacy=%d",
+				    hand, controllerDeviceIndex, double(thumbstick.x), double(thumbstick.y),
+				    static_cast<unsigned long long>(state->ulButtonPressed), int(usingLegacyInput));
+		}
+	}
 
 	VRControllerAxis_t& trigger = state->rAxis[1];
 	trigger.x = readFloat(ctrl.trigger);

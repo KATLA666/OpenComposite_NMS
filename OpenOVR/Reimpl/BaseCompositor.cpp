@@ -17,6 +17,7 @@ using glm::vec3;
 using glm::vec4;
 
 #include "BaseCompositor.h"
+#include "NmsHandMenuTrace.h"
 #include "BaseOverlay.h"
 
 // For the left and right hand constants - TODO move them to their own file
@@ -71,6 +72,7 @@ ETrackingUniverseOrigin BaseCompositor::GetTrackingSpace()
 ovr_enum_t BaseCompositor::WaitGetPoses(TrackedDevicePose_t* renderPoseArray, uint32_t renderPoseArrayCount,
     TrackedDevicePose_t* gamePoseArray, uint32_t gamePoseArrayCount)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::WaitPoses);
 
 	// Assume this method isn't being called between frames, b/c it really shouldn't be.
 	leftEyeSubmitted = false;
@@ -126,6 +128,7 @@ mat4 BaseCompositor::GetTrackerTransform()
 ovr_enum_t BaseCompositor::GetLastPoses(TrackedDevicePose_t* renderPoseArray, uint32_t renderPoseArrayCount,
     TrackedDevicePose_t* gamePoseArray, uint32_t gamePoseArrayCount)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::LastPoses);
 
 	ETrackingUniverseOrigin origin = GetTrackingSpace();
 
@@ -154,19 +157,35 @@ ovr_enum_t BaseCompositor::GetLastPoses(TrackedDevicePose_t* renderPoseArray, ui
 		}
 	}
 
+	if (NmsHandMenuTrace::Enabled()) {
+		for (int hand = 0; hand < 2; ++hand) {
+			if (!NmsHandMenuTrace::Gate(128 + hand, 0)) continue;
+			auto device = BackendManager::Instance().GetDeviceByHand(static_cast<ITrackedDevice::TrackedDeviceType>(hand));
+			if (!device) {
+				NmsHandMenuTrace::Print("POSE api=Compositor.GetLastPoses hand=%d device=<missing>", hand);
+				continue;
+			}
+			const auto index = device->DeviceIndex();
+			const auto* poses = (gamePoseArray && index < gamePoseArrayCount ? gamePoseArray : renderPoseArray);
+			const uint32_t count = (gamePoseArray && index < gamePoseArrayCount ? gamePoseArrayCount : renderPoseArrayCount);
+			NmsHandMenuTrace::PosePermitted("Compositor.GetLastPoses", hand, index, int(origin), poses && index < count ? poses + index : nullptr);
+		}
+	}
 	return VRCompositorError_None;
 }
 
 ovr_enum_t BaseCompositor::GetLastPoseForTrackedDeviceIndex(TrackedDeviceIndex_t unDeviceIndex, TrackedDevicePose_t* pOutputPose,
     TrackedDevicePose_t* pOutputGamePose)
 {
+	NmsHandMenuTrace::Hit(NmsHandMenuTrace::Api::SinglePose);
 
 	if (unDeviceIndex >= k_unMaxTrackedDeviceCount) {
 		return VRCompositorError_IndexOutOfRange;
 	}
 
 	TrackedDevicePose_t pose{};
-	GetSinglePoseRendering(GetTrackingSpace(), unDeviceIndex, &pose);
+	const auto origin = GetTrackingSpace();
+	GetSinglePoseRendering(origin, unDeviceIndex, &pose);
 
 	if (pOutputPose) {
 		*pOutputPose = pose;
@@ -176,6 +195,11 @@ ovr_enum_t BaseCompositor::GetLastPoseForTrackedDeviceIndex(TrackedDeviceIndex_t
 		*pOutputGamePose = pose;
 	}
 
+	if (NmsHandMenuTrace::Enabled()) for (int hand = 0; hand < 2; ++hand) {
+		auto device = BackendManager::Instance().GetDeviceByHand(static_cast<ITrackedDevice::TrackedDeviceType>(hand));
+		if (device && device->DeviceIndex() == unDeviceIndex && NmsHandMenuTrace::Gate(132 + hand, 0))
+			NmsHandMenuTrace::PosePermitted("Compositor.GetLastPoseForTrackedDeviceIndex", hand, unDeviceIndex, int(origin), &pose);
+	}
 	return VRCompositorError_None;
 }
 
